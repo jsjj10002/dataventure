@@ -27,18 +27,16 @@ export const createJobPosting = async (
       title,
       description,
       position,
-      company,
-      location,
-      employmentType,
-      salary,
       experienceMin,
       experienceMax,
+      salaryMin,
+      salaryMax,
       requirements,
       preferredSkills,
     } = req.body;
 
     // 필수 필드 검증
-    if (!title || !description || !position || !company) {
+    if (!title || !description || !position) {
       throw new AppError('필수 필드가 누락되었습니다.', 400);
     }
 
@@ -47,12 +45,10 @@ export const createJobPosting = async (
         title,
         description,
         position,
-        company,
-        location,
-        employmentType,
-        salary,
         experienceMin: experienceMin || 0,
         experienceMax: experienceMax || null,
+        salaryMin: salaryMin ?? null,
+        salaryMax: salaryMax ?? null,
         requirements: requirements || [],
         preferredSkills: preferredSkills || [],
         recruiterId: req.user.userId,
@@ -80,13 +76,7 @@ export const listJobPostings = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const {
-      status = 'ACTIVE',
-      position,
-      company,
-      page = 1,
-      limit = 10,
-    } = req.query;
+    const { status = 'ACTIVE', position, page = 1, limit = 10 } = req.query;
 
     const skip = (Number(page) - 1) * Number(limit);
 
@@ -101,9 +91,7 @@ export const listJobPostings = async (
       where.position = { contains: position as string, mode: 'insensitive' };
     }
 
-    if (company) {
-      where.company = { contains: company as string, mode: 'insensitive' };
-    }
+    // 회사 필드는 스키마에 존재하지 않음 (회사 정보는 RecruiterProfile 참조)
 
     const [jobs, total] = await Promise.all([
       prisma.jobPosting.findMany({
@@ -116,10 +104,8 @@ export const listJobPostings = async (
           title: true,
           description: true,
           position: true,
-          company: true,
-          location: true,
-          employmentType: true,
-          salary: true,
+          salaryMin: true,
+          salaryMax: true,
           experienceMin: true,
           experienceMax: true,
           requirements: true,
@@ -161,8 +147,8 @@ export const getJobPosting = async (
         recruiter: {
           select: {
             id: true,
-            name: true,
-            email: true,
+            companyName: true,
+            position: true,
           },
         },
       },
@@ -212,12 +198,10 @@ export const updateJobPosting = async (
       title,
       description,
       position,
-      company,
-      location,
-      employmentType,
-      salary,
       experienceMin,
       experienceMax,
+      salaryMin,
+      salaryMax,
       requirements,
       preferredSkills,
       status,
@@ -229,10 +213,8 @@ export const updateJobPosting = async (
         title,
         description,
         position,
-        company,
-        location,
-        employmentType,
-        salary,
+        salaryMin,
+        salaryMax,
         experienceMin,
         experienceMax,
         requirements,

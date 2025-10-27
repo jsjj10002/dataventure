@@ -56,7 +56,7 @@ def match_candidate_with_job(
         job_posting
     )
     
-    # 3. 매칭 근거 생성 (GPT-4)
+    # 3. 매칭 근거 생성 (GPT-5)
     matching_reason = generate_matching_reason(
         candidate_profile,
         job_posting,
@@ -128,13 +128,11 @@ def generate_matching_reason(
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4",
+            model=os.getenv("OPENAI_MODEL", "gpt-5"),
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
-            ],
-            temperature=0.7,
-            max_tokens=200
+            ]
         )
         
         reason = response.choices[0].message.content.strip()

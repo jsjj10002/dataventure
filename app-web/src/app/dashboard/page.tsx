@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuthStore } from '@/stores/auth-store';
 
 export default function DashboardPage() {
@@ -91,7 +92,7 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {user.role === 'CANDIDATE' && (
                 <>
-                  <a
+                  <Link
                     href="/interview"
                     className="p-4 border border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-all cursor-pointer block"
                   >
@@ -104,8 +105,8 @@ export default function DashboardPage() {
                     <span className="text-sm text-primary-600 hover:text-primary-700 font-medium">
                       인터뷰 시작하기 →
                     </span>
-                  </a>
-                  <a
+                  </Link>
+                  <Link
                     href="/recommendations"
                     className="p-4 border border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-all cursor-pointer block"
                   >
@@ -116,8 +117,8 @@ export default function DashboardPage() {
                     <span className="text-sm text-primary-600 hover:text-primary-700 font-medium">
                       추천 공고 보기 →
                     </span>
-                  </a>
-                  <a
+                  </Link>
+                  <Link
                     href="/jobs"
                     className="p-4 border border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-all cursor-pointer block"
                   >
@@ -128,7 +129,7 @@ export default function DashboardPage() {
                     <span className="text-sm text-primary-600 hover:text-primary-700 font-medium">
                       공고 보기 →
                     </span>
-                  </a>
+                  </Link>
                   <div className="p-4 border border-gray-200 rounded-lg">
                     <h4 className="font-medium text-gray-900 mb-2">프로필 관리</h4>
                     <p className="text-sm text-gray-600 mb-3">
@@ -140,22 +141,22 @@ export default function DashboardPage() {
               )}
               {user.role === 'RECRUITER' && (
                 <>
-                  <div className="p-4 border border-gray-200 rounded-lg hover:border-primary-500 transition-colors">
+                  <Link href="/test" className="p-4 border border-gray-200 rounded-lg hover:border-primary-500 transition-colors block">
                     <h4 className="font-medium text-gray-900 mb-2">
                       채용 공고 등록
                     </h4>
                     <p className="text-sm text-gray-600">
                       새로운 채용 공고를 등록하고 AI가 후보자를 매칭해드립니다.
                     </p>
-                  </div>
-                  <div className="p-4 border border-gray-200 rounded-lg hover:border-primary-500 transition-colors">
+                  </Link>
+                  <Link href="/test" className="p-4 border border-gray-200 rounded-lg hover:border-primary-500 transition-colors block">
                     <h4 className="font-medium text-gray-900 mb-2">
                       추천 후보자 확인
                     </h4>
                     <p className="text-sm text-gray-600">
                       AI가 분석한 후보자 평가 결과를 확인하세요.
                     </p>
-                  </div>
+                  </Link>
                 </>
               )}
             </div>

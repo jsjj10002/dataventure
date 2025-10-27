@@ -17,7 +17,7 @@
 
 ## 📖 프로젝트 개요
 
-**flex-AI-Recruiter**는 OpenAI GPT-4와 Sentence-Transformers를 활용한 차세대 채용 플랫폼입니다. 
+**flex-AI-Recruiter**는 OpenAI GPT-5(환경변수 `OPENAI_MODEL`로 변경 가능)와 Sentence-Transformers를 활용한 차세대 채용 플랫폼이다.
 전통적인 이력서 검토와 면접을 혁신하여, AI와의 자연스러운 대화를 통해 구직자의 역량을 객관적으로 평가하고, 
 최적의 채용 공고와 매칭합니다.
 
@@ -80,7 +80,8 @@
 
 ### Backend AI (Python)
 - **Framework**: FastAPI
-- **LLM**: OpenAI GPT-4 (질문 생성, 평가, 매칭 근거)
+- **LLM**: OpenAI GPT-5 (질문 생성, 평가, 매칭 근거) — `OPENAI_MODEL`로 모델 교체 가능
+  - 주의: 일부 모델은 `temperature`, `max_tokens`를 지원하지 않는다. 현재 코드는 모델 호환을 위해 해당 옵션을 사용하지 않는다.
 - **Embedding**: Sentence-Transformers (`jhgan/ko-sbert-nli`)
 - **Analysis**: NumPy (통계 계산)
 - **Async**: asyncio
@@ -236,6 +237,9 @@ cp service-ai/.env.example service-ai/.env
 # OpenAI API (필수!)
 OPENAI_API_KEY=sk-...your-openai-api-key...
 
+# OpenAI 모델 (기본값 gpt-5, 필요 시 교체)
+OPENAI_MODEL=gpt-5
+
 # Embedding Model
 EMBEDDING_MODEL=jhgan/ko-sbert-nli
 
@@ -282,7 +286,15 @@ pip install -r requirements.txt
 python -m uvicorn app.main:app --reload --port 8000
 ```
 
-**참고**: 첫 실행 시 Sentence-Transformers 모델 (`jhgan/ko-sbert-nli`, 약 450MB)이 자동 다운로드되어 1-2분 소요됨.
+**참고**:
+- 첫 실행 시 Sentence-Transformers 모델 (`jhgan/ko-sbert-nli`, 약 450MB) 자동 다운로드로 1-2분 소요됨.
+- OpenAI 모델은 `.env`의 `OPENAI_MODEL` 값으로 제어되며 기본은 `gpt-5`이다.
+
+### 🔧 테스트 콘솔(개발용)
+
+- 경로: `/test`
+- 기능: 소켓 인터뷰 시작/메시지/종료, 공고 목록, 추천 공고 요청을 버튼으로 수행하고 실시간 로그 확인
+- 사용법: 로그인 후 상단 네비게이션에서 “테스트” 클릭
 
 #### Frontend (Port 3000)
 ```bash

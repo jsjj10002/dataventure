@@ -64,3 +64,13 @@ prisma/migrations/
 logs/
 *.log
 
+# GCP 서비스 계정 키 (보안)
+*-[0-9a-f]*.json
+dataventureterabyte-*.json
+service-account-*.json
+gcp-*.json
+
+# 테스트 커버리지 리포트
+coverage/
+.nyc_output/
+*.lcov 

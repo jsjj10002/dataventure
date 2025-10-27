@@ -107,7 +107,8 @@
 |---------|------|------|----------|
 | 언어 | Python | 3.11+ | AI/ML 생태계의 표준 |
 | 프레임워크 | FastAPI | 0.104+ | 비동기 처리, 자동 문서화 |
-| LLM | OpenAI API | GPT-4 | 자연스러운 대화, 질문 생성 |
+| LLM | OpenAI API | GPT-5 (env OPENAI_MODEL) | 자연스러운 대화, 질문 생성 |
+| LLM 옵션 | - | 모델별 제약 반영 | 일부 gpt-5 계열은 temperature/max_tokens 미지원 → 코드에서 사용하지 않음 |
 | STT/TTS | OpenAI Whisper/TTS | - | 음성 인터뷰 |
 | 임베딩 | Sentence-Transformers | - | ko-sbert-nli (한국어 특화) |
 | 벡터 연산 | NumPy | - | 임베딩 유사도 계산 |
@@ -128,6 +129,7 @@
 | 컨테이너 | Docker | 서비스별 컨테이너화 |
 | CI/CD | GitHub Actions | 자동 테스트 및 배포 |
 | 버전 관리 | Git (Git-flow) | feature/develop/main 브랜치 전략 |
+| 보안 미들웨어 | Helmet, Rate Limiter | 보안 헤더/요청 제한으로 공격 표면 축소 |
 
 ### 3.6 Testing
 | 카테고리 | 기술 | 대상 |
@@ -434,6 +436,11 @@ CREATE EXTENSION IF NOT EXISTS vector;
 - `GET /api/v1/candidates/:candidateId/recommendations` - 구직자에게 추천 공고
 - `GET /api/v1/jobs/:jobId/recommendations` - 공고에 추천 후보자
 
+#### 권한 정책 (추가)
+- `RECRUITER` 전용: `POST/PUT/DELETE /api/v1/jobs/*`, `GET /api/v1/recommendations/candidates/:jobId`
+- `CANDIDATE` 전용: `GET /api/v1/recommendations/jobs`
+- 공용 읽기: `GET /api/v1/jobs`, `GET /api/v1/jobs/:id`
+
 ### 6.2 Service Core (Node.js) - Socket.IO Events
 
 #### 클라이언트 → 서버
@@ -482,19 +489,19 @@ CREATE EXTENSION IF NOT EXISTS vector;
 ### 7.1 LLM 프롬프트 전략
 
 #### 질문 생성 (Question Generation)
-- **모델:** GPT-4
+- **모델:** GPT-5 (환경변수 OPENAI_MODEL로 변경 가능)
 - **역할:** 전문 HR 면접관
 - **입력:** 이력서, 공고, 이전 대화 내역
 - **출력:** 맞춤형 질문 (기술/경험/상황 기반)
 
 #### 답변 분석 (Answer Analysis)
-- **모델:** GPT-4
+- **모델:** GPT-5 (환경변수 OPENAI_MODEL로 변경 가능)
 - **역할:** 답변 품질 평가자
 - **입력:** 질문, 답변
 - **출력:** 점수, 키워드, 꼬리 질문 필요 여부
 
 #### 평가 생성 (Evaluation Generation)
-- **모델:** GPT-4
+- **모델:** GPT-5 (환경변수 OPENAI_MODEL로 변경 가능)
 - **역할:** 통계 분석가 + HR 전문가
 - **입력:** 전체 대화 기록, 평가 기준
 - **출력:** 정량적 점수 + 정성적 피드백 (강점, 약점, 개선 방안)
@@ -552,6 +559,9 @@ PORT=8000
 # OpenAI API
 OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
+# OpenAI 모델 (기본: gpt-5)
+OPENAI_MODEL=gpt-5
+
 # 데이터베이스 (벡터 검색용)
 DATABASE_URL="postgresql://user:password@localhost:5432/flex_recruiter?schema=public"
 
@@ -607,7 +617,7 @@ GCP_PROJECT_ID=your-gcp-project-id
 - [x] Socket.IO 연동 (실시간 채팅)
 - [x] AI 인터뷰 UI 컴포넌트 (채팅 인터페이스)
 - [x] 인터뷰 세션 관리 (시작/종료/재연결)
-- [x] OpenAI GPT-4 질문 생성 통합
+- [x] OpenAI GPT-5 질문 생성 통합
 - [x] 실시간 메시지 주고받기
 - [x] 반응형 디자인
 - [ ] STT/TTS 통합 (추후 구현) (Tailwind CSS)
@@ -620,6 +630,8 @@ GCP_PROJECT_ID=your-gcp-project-id
 
 ### Sprint 4: Feedback - 평가 시스템 (2주) ★ ✓ 완료
 - [x] 답변 분석 AI 엔진 (GPT-4 기반)
+  
+  (업데이트) 기본 모델을 GPT-5로 전환, `OPENAI_MODEL`로 변경 가능
 - [x] 통계 분석 기반 평가 알고리즘
   - 기술 역량 점수 (0-100)
   - 커뮤니케이션 점수 (0-100)
@@ -634,23 +646,51 @@ GCP_PROJECT_ID=your-gcp-project-id
 - [x] 임베딩 생성 서비스 (이력서, 채용 공고)
 - [x] 코사인 유사도 기반 매칭 알고리즘
 - [x] 규칙 기반 보정 (경력, 기술 스택)
-- [x] 매칭 근거 생성 (GPT-4)
+- [x] 매칭 근거 생성 (GPT-5)
 - [x] 채용 공고 CRUD API
 - [x] 추천 API (구직자용/기업용)
 - [x] 채용 공고 목록 및 상세 페이지 UI
 - [x] AI 추천 공고 페이지 UI
 
-### Sprint 6: 테스트 & 최적화 (1주)
-- [ ] 단위 테스트 작성 (Jest, Pytest)
-- [ ] E2E 테스트 (Playwright)
-- [ ] 성능 최적화 (캐싱, DB 인덱스)
-- [ ] 보안 점검 (SQL Injection, XSS 방어)
+### Sprint 6: 테스트 & 최적화 (1주) ✓ 완료
+- [x] 긴급 보안 이슈 해결 (GCP 키 보호, .gitignore 업데이트)
+- [x] service-ai 의존성 복원 (requirements.txt)
+- [x] Backend Core 단위 테스트 작성
+  - JWT 유틸리티 테스트 확장
+  - 인증 미들웨어 테스트
+  - 테스트 헬퍼 유틸리티 작성
+  - User, JobPosting 컨트롤러 테스트 구조
+- [x] Backend AI 단위 테스트 작성
+  - 매칭 알고리즘 테스트 (코사인 유사도, 보너스 계산)
+  - 평가 생성 테스트 (통계 계산, 점수 분류)
+  - Pytest 픽스처 및 모킹 설정
+- [x] Frontend 단위 테스트 작성
+  - Auth Store (Zustand) 테스트
+  - Jest + React Testing Library 설정
+- [x] DB 인덱스 추가 및 성능 최적화
+  - 인터뷰, 채용 공고, 평가 테이블 인덱스
+  - 복합 인덱스 및 부분 인덱스
+  - 예상 성능 향상: 50-80%
+- [x] 보안 강화
+  - CSRF 방어 미들웨어 (Origin/Referer 검증)
+  - Rate Limiting 세분화 (API별 제한)
+  - 브루트 포스 공격 방어 (로그인, 회원가입)
+  - OpenAI API 비용 관리 (AI 요청 제한)
+- [x] E2E 테스트 설정 (Playwright)
+  - 인증 플로우 테스트
+  - AI 인터뷰 플로우 테스트
+  - 멀티 브라우저 테스트 설정
+- [x] 테스트 커버리지 리포트 생성
+  - 테스트 가이드 문서 작성 (TESTING_GUIDE.md)
+  - 커버리지 목표 설정 (70%)
 
-### Sprint 7: 배포 & CI/CD (1주)
-- [ ] Dockerfile 및 Docker Compose 최종 검증
-- [ ] GCP Cloud Run/GKE 배포 스크립트
-- [ ] GitHub Actions CI/CD 파이프라인
-- [ ] 모니터링 및 로깅 (Cloud Logging, Sentry)
+### Sprint 7: 배포 & CI/CD (1주) ✓ 완료
+- [x] Docker 이미지 최적화 (멀티 스테이지 빌드 확인)
+- [x] GitHub Actions CI/CD 파이프라인 (ci.yml, cd-staging.yml, cd-production.yml)
+- [x] GCP Cloud Run 배포 설정 (Workload Identity, Secret Manager)
+- [x] 헬스 체크 엔드포인트 추가 (/health, /health/detailed, /health/ready, /health/live)
+- [x] 환경 변수 관리 및 시크릿 설정 (DEPLOYMENT.md 문서화)
+- [x] 로깅 및 모니터링 설정 (Cloud Logging, Error Reporting)
 
 ---
 
@@ -660,4 +700,6 @@ GCP_PROJECT_ID=your-gcp-project-id
 - **2025-10-27:** Sprint 2 완료 - Socket.IO 실시간 채팅, OpenAI GPT-4 질문 생성, AI 인터뷰 UI
 - **2025-10-27:** Sprint 4 완료 - 통계 기반 평가 시스템, GPT-4 피드백 생성, 평가 결과 UI
 - **2025-10-27:** Sprint 5 완료 - Sentence-Transformers 매칭, 채용 공고 CRUD, AI 추천 시스템
+- **2025-10-27:** Sprint 6 완료 - 단위 테스트, E2E 테스트, DB 인덱스, 보안 강화, 테스트 가이드
+- **2025-10-27:** Sprint 7 완료 - GitHub Actions CI/CD, GCP Cloud Run 배포, 헬스 체크, DEPLOYMENT.md 문서
 

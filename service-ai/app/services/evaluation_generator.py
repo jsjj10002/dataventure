@@ -103,13 +103,11 @@ JSON 형식으로 응답하세요:
     
     try:
         response = client.chat.completions.create(
-            model="gpt-4",
+            model=os.getenv("OPENAI_MODEL", "gpt-5"),
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.7,
-            max_tokens=1500,
             response_format={"type": "json_object"}
         )
         

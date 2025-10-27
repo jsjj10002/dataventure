@@ -5,6 +5,8 @@
 
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
@@ -20,6 +22,7 @@ import interviewRoutes from './routes/interview.routes';
 import evaluationRoutes from './routes/evaluation.routes';
 import jobPostingRoutes from './routes/jobPosting.routes';
 import recommendationRoutes from './routes/recommendation.routes';
+import healthRoutes from './routes/health.routes';
 
 // 환경 변수 로딩
 dotenv.config();
@@ -47,6 +50,15 @@ app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true,
 }));
+// 보안 헤더
+app.use(helmet());
+// 요청 제한 (기본 15분 1000회)
+app.use(rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_MAX || 1000),
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -67,24 +79,7 @@ app.get('/', (req: Request, res: Response) => {
   });
 });
 
-app.get('/health', async (req: Request, res: Response) => {
-  try {
-    // 데이터베이스 연결 확인
-    await prisma.$queryRaw`SELECT 1`;
-    
-    res.json({
-      status: 'healthy',
-      database: 'connected',
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    res.status(503).json({
-      status: 'unhealthy',
-      database: 'disconnected',
-      timestamp: new Date().toISOString(),
-    });
-  }
-});
+app.use('/', healthRoutes);
 
 // ===== API 라우터 =====
 app.use('/api/v1/auth', authRoutes);

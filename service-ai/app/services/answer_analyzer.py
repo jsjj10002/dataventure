@@ -56,13 +56,11 @@ def analyze_single_answer(
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4",
+            model=os.getenv("OPENAI_MODEL", "gpt-5"),
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.3,  # 일관성 있는 평가를 위해 낮은 temperature
-            max_tokens=500,
             response_format={"type": "json_object"}  # JSON 응답 강제
         )
         

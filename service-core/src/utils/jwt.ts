@@ -26,7 +26,7 @@ export const generateToken = (payload: JwtPayload): string => {
     throw new Error('JWT_SECRET 환경 변수가 설정되지 않았습니다.');
   }
 
-  return jwt.sign(payload, secret, { expiresIn });
+  return jwt.sign(payload as any, secret as jwt.Secret, { expiresIn } as jwt.SignOptions);
 };
 
 /**
@@ -60,6 +60,9 @@ export const extractTokenFromHeader = (authHeader?: string): string | null => {
     return null;
   }
 
-  return authHeader.substring(7); // "Bearer " 제거
+  const token = authHeader.substring(7).trim(); // "Bearer " 제거 후 공백 제거
+  
+  // 빈 문자열이면 null 반환
+  return token || null;
 };
 

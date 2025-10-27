@@ -48,12 +48,17 @@ async def health_check():
         "status": "healthy",
         "openai_configured": bool(openai_api_key and openai_api_key.startswith("sk-")),
         "embedding_model": os.getenv("EMBEDDING_MODEL", "jhgan/ko-sbert-nli"),
+        "openai_model": os.getenv("OPENAI_MODEL", "gpt-5"),
     }
 
 
 # ===== AI API 라우터 =====
-from app.api import question, evaluation, matching
+from app.api import question, evaluation, matching, health
 
+# 헬스 체크
+app.include_router(health.router, tags=["헬스 체크"])
+
+# AI API 라우터
 app.include_router(question.router, prefix="/internal/ai", tags=["Question Generation"])
 app.include_router(evaluation.router, prefix="/internal/ai", tags=["Evaluation"])
 app.include_router(matching.router, prefix="/internal/ai", tags=["Matching"])

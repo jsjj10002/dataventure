@@ -10,7 +10,7 @@ import {
   updateJobPosting,
   deleteJobPosting,
 } from '../controllers/jobPosting.controller';
-import { authenticate } from '../middlewares/auth.middleware';
+import { authenticate, authorize } from '../middlewares/auth.middleware';
 
 const router = express.Router();
 
@@ -19,7 +19,7 @@ const router = express.Router();
  * 채용 공고 생성
  * @requires JWT 인증 + RECRUITER 권한
  */
-router.post('/', authenticate, createJobPosting);
+router.post('/', authenticate, authorize('RECRUITER', 'ADMIN'), createJobPosting);
 
 /**
  * GET /api/v1/jobs
@@ -40,14 +40,14 @@ router.get('/:id', getJobPosting);
  * 채용 공고 수정
  * @requires JWT 인증 + 작성자 본인
  */
-router.put('/:id', authenticate, updateJobPosting);
+router.put('/:id', authenticate, authorize('RECRUITER', 'ADMIN'), updateJobPosting);
 
 /**
  * DELETE /api/v1/jobs/:id
  * 채용 공고 삭제
  * @requires JWT 인증 + 작성자 본인
  */
-router.delete('/:id', authenticate, deleteJobPosting);
+router.delete('/:id', authenticate, authorize('RECRUITER', 'ADMIN'), deleteJobPosting);
 
 export default router;
 
