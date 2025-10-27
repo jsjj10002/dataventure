@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  # PostgreSQL + pgvector
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: flex-recruiter-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: flex_recruiter
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend Core API (Node.js + Express)
+  service-core:
+    build:
+      context: ./service-core
+      dockerfile: Dockerfile
+    container_name: flex-recruiter-core
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=development
+      - PORT=8080
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/flex_recruiter?schema=public
+      - JWT_SECRET=dev-secret-key-change-in-production
+      - AI_SERVICE_URL=http://service-ai:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./service-core:/app
+      - /app/node_modules
+    command: npm run dev
+
+  # Backend AI Engine (Python + FastAPI)
+  service-ai:
+    build:
+      context: ./service-ai
+      dockerfile: Dockerfile
+    container_name: flex-recruiter-ai
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/flex_recruiter?schema=public
+      - EMBEDDING_MODEL=jhgan/ko-sbert-nli
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./service-ai:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Frontend (Next.js) - 개발 환경에서만 사용
+  app-web:
+    build:
+      context: ./app-web
+      dockerfile: Dockerfile.dev
+    container_name: flex-recruiter-web
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_CORE_API_URL=http://localhost:8080
+      - NEXT_PUBLIC_SOCKET_URL=http://localhost:8080
+    depends_on:
+      - service-core
+    volumes:
+      - ./app-web:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
+
+volumes:
+  postgres_data:
+

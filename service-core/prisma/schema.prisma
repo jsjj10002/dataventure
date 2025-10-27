@@ -1,0 +1,202 @@
+// Prisma 스키마 - flex-AI-Recruiter
+// PostgreSQL + pgvector 확장 사용
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+// ===== 사용자 관련 =====
+
+enum Role {
+  CANDIDATE  // 구직자
+  RECRUITER  // 채용담당자
+  ADMIN      // 관리자
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(CANDIDATE)
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  candidateProfile CandidateProfile?
+  recruiterProfile RecruiterProfile?
+  interviews       Interview[]
+
+  @@map("users")
+}
+
+// 구직자 프로필
+model CandidateProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // 이력서 정보
+  resumeText      String?  @db.Text
+  resumeUrl       String?  // Cloud Storage URL
+  // pgvector 임베딩 (Unsupported type으로 표시되지만 런타임에 작동)
+  resumeEmbedding String?  @db.Text  // JSON 문자열로 저장 후 파싱
+  
+  // 기본 정보
+  skills          String[] // 예: ["Python", "FastAPI", "React"]
+  experience      Int?     // 경력 (년)
+  education       String?  // 학력
+  desiredPosition String?  // 희망 직무
+  desiredSalary   Int?     // 희망 연봉 (만원)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("candidate_profiles")
+}
+
+// 채용담당자 프로필
+model RecruiterProfile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  companyName String
+  companyUrl  String?
+  position    String   // 채용담당자 직책
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  jobPostings JobPosting[]
+
+  @@map("recruiter_profiles")
+}
+
+// ===== 채용 공고 =====
+
+enum JobStatus {
+  ACTIVE   // 활성
+  CLOSED   // 마감
+}
+
+model JobPosting {
+  id              String   @id @default(uuid())
+  recruiterId     String
+  recruiter       RecruiterProfile @relation(fields: [recruiterId], references: [id], onDelete: Cascade)
+  
+  title           String
+  description     String   @db.Text
+  requirements    String[] // 필수 요건
+  preferredSkills String[] // 우대 사항
+  
+  position        String   // 직무
+  experienceMin   Int?     // 최소 경력 (년)
+  experienceMax   Int?     // 최대 경력 (년)
+  salaryMin       Int?     // 최소 연봉 (만원)
+  salaryMax       Int?     // 최대 연봉 (만원)
+  
+  status          JobStatus @default(ACTIVE)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  interviews      Interview[]
+
+  @@map("job_postings")
+}
+
+// ===== 인터뷰 =====
+
+enum InterviewStatus {
+  IN_PROGRESS  // 진행 중
+  COMPLETED    // 완료
+  ABANDONED    // 중단
+}
+
+model Interview {
+  id              String   @id @default(uuid())
+  candidateId     String
+  candidate       User     @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  
+  jobPostingId    String?
+  jobPosting      JobPosting? @relation(fields: [jobPostingId], references: [id], onDelete: SetNull)
+  
+  status          InterviewStatus @default(IN_PROGRESS)
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+  
+  // Relations
+  messages        InterviewMessage[]
+  evaluation      Evaluation?
+
+  @@map("interviews")
+}
+
+// 인터뷰 메시지 (대화 기록)
+enum MessageRole {
+  AI         // AI 질문
+  CANDIDATE  // 구직자 답변
+}
+
+enum ContentType {
+  TEXT   // 텍스트
+  AUDIO  // 음성
+}
+
+model InterviewMessage {
+  id            String   @id @default(uuid())
+  interviewId   String
+  interview     Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  
+  role          MessageRole
+  content       String   @db.Text
+  contentType   ContentType @default(TEXT)
+  audioUrl      String?  // TTS 생성 음성 URL (선택)
+  
+  // 임베딩 (답변 분석용)
+  embedding     String?  @db.Text  // JSON 문자열로 저장
+  
+  createdAt     DateTime @default(now())
+
+  @@map("interview_messages")
+}
+
+// ===== 평가 결과 =====
+
+model Evaluation {
+  id            String   @id @default(uuid())
+  interviewId   String   @unique
+  interview     Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  
+  // 평가 점수 (0-100)
+  technicalScore      Float  // 기술 역량
+  communicationScore  Float  // 커뮤니케이션
+  problemSolvingScore Float  // 문제 해결 능력
+  overallScore        Float  // 종합 점수
+  
+  // 통계 분석 기반 피드백 (JSON 형태)
+  strengthsJson       String   @db.Text  // 강점 목록
+  weaknessesJson      String   @db.Text  // 약점 목록
+  detailedFeedback    String   @db.Text  // 상세 피드백
+  
+  // 매칭 정보 (특정 공고와의 매칭)
+  matchingScore       Float?   // 0-100
+  matchingReason      String?  @db.Text
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("evaluations")
+}
+

@@ -1,0 +1,294 @@
+/**
+ * 채용 공고 관련 컨트롤러
+ */
+
+import { Request, Response, NextFunction } from 'express';
+import { PrismaClient } from '@prisma/client';
+import { AppError } from '../middlewares/error.middleware';
+
+const prisma = new PrismaClient();
+
+/**
+ * 채용 공고 생성
+ * POST /api/v1/jobs
+ * @requires JWT 인증 + RECRUITER 권한
+ */
+export const createJobPosting = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.user || req.user.role !== 'RECRUITER') {
+      throw new AppError('채용담당자만 공고를 생성할 수 있습니다.', 403);
+    }
+
+    const {
+      title,
+      description,
+      position,
+      company,
+      location,
+      employmentType,
+      salary,
+      experienceMin,
+      experienceMax,
+      requirements,
+      preferredSkills,
+    } = req.body;
+
+    // 필수 필드 검증
+    if (!title || !description || !position || !company) {
+      throw new AppError('필수 필드가 누락되었습니다.', 400);
+    }
+
+    const jobPosting = await prisma.jobPosting.create({
+      data: {
+        title,
+        description,
+        position,
+        company,
+        location,
+        employmentType,
+        salary,
+        experienceMin: experienceMin || 0,
+        experienceMax: experienceMax || null,
+        requirements: requirements || [],
+        preferredSkills: preferredSkills || [],
+        recruiterId: req.user.userId,
+        status: 'ACTIVE',
+      },
+    });
+
+    res.status(201).json({
+      message: '채용 공고가 생성되었습니다.',
+      jobPosting,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 채용 공고 목록 조회
+ * GET /api/v1/jobs
+ * @public (인증 불필요)
+ */
+export const listJobPostings = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const {
+      status = 'ACTIVE',
+      position,
+      company,
+      page = 1,
+      limit = 10,
+    } = req.query;
+
+    const skip = (Number(page) - 1) * Number(limit);
+
+    // 필터 구성
+    const where: any = {};
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (position) {
+      where.position = { contains: position as string, mode: 'insensitive' };
+    }
+
+    if (company) {
+      where.company = { contains: company as string, mode: 'insensitive' };
+    }
+
+    const [jobs, total] = await Promise.all([
+      prisma.jobPosting.findMany({
+        where,
+        skip,
+        take: Number(limit),
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          position: true,
+          company: true,
+          location: true,
+          employmentType: true,
+          salary: true,
+          experienceMin: true,
+          experienceMax: true,
+          requirements: true,
+          preferredSkills: true,
+          status: true,
+          createdAt: true,
+        },
+      }),
+      prisma.jobPosting.count({ where }),
+    ]);
+
+    res.status(200).json({
+      jobs,
+      total,
+      page: Number(page),
+      totalPages: Math.ceil(total / Number(limit)),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 채용 공고 상세 조회
+ * GET /api/v1/jobs/:id
+ * @public
+ */
+export const getJobPosting = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const jobPosting = await prisma.jobPosting.findUnique({
+      where: { id },
+      include: {
+        recruiter: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    if (!jobPosting) {
+      throw new AppError('채용 공고를 찾을 수 없습니다.', 404);
+    }
+
+    res.status(200).json({ jobPosting });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 채용 공고 수정
+ * PUT /api/v1/jobs/:id
+ * @requires JWT 인증 + 작성자 본인
+ */
+export const updateJobPosting = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      throw new AppError('인증이 필요합니다.', 401);
+    }
+
+    const { id } = req.params;
+
+    // 권한 확인
+    const existingJob = await prisma.jobPosting.findUnique({
+      where: { id },
+    });
+
+    if (!existingJob) {
+      throw new AppError('채용 공고를 찾을 수 없습니다.', 404);
+    }
+
+    if (existingJob.recruiterId !== req.user.userId) {
+      throw new AppError('수정 권한이 없습니다.', 403);
+    }
+
+    const {
+      title,
+      description,
+      position,
+      company,
+      location,
+      employmentType,
+      salary,
+      experienceMin,
+      experienceMax,
+      requirements,
+      preferredSkills,
+      status,
+    } = req.body;
+
+    const updatedJob = await prisma.jobPosting.update({
+      where: { id },
+      data: {
+        title,
+        description,
+        position,
+        company,
+        location,
+        employmentType,
+        salary,
+        experienceMin,
+        experienceMax,
+        requirements,
+        preferredSkills,
+        status,
+      },
+    });
+
+    res.status(200).json({
+      message: '채용 공고가 수정되었습니다.',
+      jobPosting: updatedJob,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 채용 공고 삭제
+ * DELETE /api/v1/jobs/:id
+ * @requires JWT 인증 + 작성자 본인
+ */
+export const deleteJobPosting = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      throw new AppError('인증이 필요합니다.', 401);
+    }
+
+    const { id } = req.params;
+
+    // 권한 확인
+    const existingJob = await prisma.jobPosting.findUnique({
+      where: { id },
+    });
+
+    if (!existingJob) {
+      throw new AppError('채용 공고를 찾을 수 없습니다.', 404);
+    }
+
+    if (existingJob.recruiterId !== req.user.userId) {
+      throw new AppError('삭제 권한이 없습니다.', 403);
+    }
+
+    await prisma.jobPosting.delete({
+      where: { id },
+    });
+
+    res.status(200).json({
+      message: '채용 공고가 삭제되었습니다.',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
