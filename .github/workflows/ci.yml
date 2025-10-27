@@ -91,7 +91,7 @@ jobs:
         working-directory: service-ai
         run: |
           source .venv/bin/activate
-          python -c "from app.services.matching_service import calculate_cosine_similarity; print('✓ Import test passed')"
+          python -c "from app.services.embedding_service import calculate_cosine_similarity; print('✓ Import test passed')"
         env:
           OPENAI_API_KEY: sk-test-fake-key
 
