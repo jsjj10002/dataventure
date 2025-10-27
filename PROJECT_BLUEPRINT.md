@@ -578,20 +578,46 @@ GCP_PROJECT_ID=your-gcp-project-id
 
 ### 9.1 개발 환경
 - **로컬:** Docker Compose로 모든 서비스 실행
-- **데이터베이스:** 로컬 PostgreSQL + pgvector
+- **데이터베이스:** 로컬 PostgreSQL + pgvector (Docker)
+- **테스트:** Jest, Pytest, Playwright
 
-### 9.2 스테이징 환경
-- **Frontend:** Vercel (자동 배포)
-- **Backend:** GCP Cloud Run (develop 브랜치)
-- **Database:** GCP Cloud SQL (스테이징 인스턴스)
-
-### 9.3 프로덕션 환경
-- **Frontend:** Vercel (main 브랜치)
-- **Backend:** GCP Cloud Run 또는 GKE (main 브랜치)
-- **Database:** GCP Cloud SQL (프로덕션 인스턴스)
+### 9.2 스테이징 환경 (현재 배포 완료 ✅)
+- **Backend Core:** GCP Cloud Run
+  - URL: https://service-core-staging-736388846271.asia-northeast3.run.app
+  - Auto-scaling: 0-10 인스턴스
+  - 메모리: 512Mi, CPU: 1
+- **Backend AI:** GCP Cloud Run
+  - URL: https://service-ai-staging-736388846271.asia-northeast3.run.app
+  - Auto-scaling: 0-5 인스턴스
+  - 메모리: 1Gi, CPU: 2
+- **Database:** 로컬 PostgreSQL (Cloud SQL 마이그레이션 예정)
 - **CI/CD:** GitHub Actions
-  - PR → 자동 테스트
-  - main 병합 → 자동 배포
+  - develop 브랜치 푸시 → 자동 테스트 & 배포
+  - Workload Identity 기반 인증
+  - Secret Manager 통합
+
+### 9.3 프로덕션 환경 (예정)
+- **Frontend:** Vercel 또는 GCP Cloud Run (main 브랜치)
+- **Backend Core:** GCP Cloud Run (main 브랜치)
+- **Backend AI:** GCP Cloud Run (main 브랜치)
+- **Database:** GCP Cloud SQL (PostgreSQL 15 + pgvector)
+- **Storage:** GCP Cloud Storage (파일 업로드)
+- **CI/CD:** GitHub Actions
+  - main 병합 → 자동 테스트 & 배포
+  - Blue-Green 배포 전략
+- **모니터링:**
+  - Cloud Logging (로그 수집)
+  - Cloud Monitoring (메트릭, 알림)
+  - Error Reporting (에러 추적)
+
+### 9.4 배포 프로세스
+1. **코드 푸시** → develop 또는 main 브랜치
+2. **CI 실행** → 자동 테스트 (Frontend, Backend Core, Backend AI)
+3. **Docker 빌드** → 멀티 스테이지 빌드로 이미지 최적화
+4. **이미지 푸시** → GCP Artifact Registry
+5. **Cloud Run 배포** → 새 Revision 생성 및 트래픽 전환
+6. **헬스 체크** → /health 엔드포인트 검증
+7. **모니터링** → Cloud Logging으로 배포 상태 확인
 
 ---
 
@@ -684,13 +710,34 @@ GCP_PROJECT_ID=your-gcp-project-id
   - 테스트 가이드 문서 작성 (TESTING_GUIDE.md)
   - 커버리지 목표 설정 (70%)
 
-### Sprint 7: 배포 & CI/CD (1주) ✓ 완료
+### Sprint 7: 배포 & CI/CD (1주) ✓ 완료 (2025-10-27)
 - [x] Docker 이미지 최적화 (멀티 스테이지 빌드 확인)
-- [x] GitHub Actions CI/CD 파이프라인 (ci.yml, cd-staging.yml, cd-production.yml)
-- [x] GCP Cloud Run 배포 설정 (Workload Identity, Secret Manager)
-- [x] 헬스 체크 엔드포인트 추가 (/health, /health/detailed, /health/ready, /health/live)
-- [x] 환경 변수 관리 및 시크릿 설정 (DEPLOYMENT.md 문서화)
-- [x] 로깅 및 모니터링 설정 (Cloud Logging, Error Reporting)
+- [x] GitHub Actions CI/CD 파이프라인
+  - CI 워크플로우: 자동 테스트 & 린트
+  - CD 워크플로우: Staging/Production 환경 자동 배포
+  - Workload Identity 기반 GCP 인증
+- [x] GCP Cloud Run 배포 설정
+  - Backend Core: https://service-core-staging-736388846271.asia-northeast3.run.app
+  - Backend AI: https://service-ai-staging-736388846271.asia-northeast3.run.app
+  - Artifact Registry 이미지 저장소
+  - Secret Manager 통합 (DATABASE_URL, JWT_SECRET, OPENAI_API_KEY)
+- [x] 헬스 체크 엔드포인트
+  - `/health`: 기본 헬스 체크
+  - `/health/detailed`: 상세 시스템 정보
+  - `/health/ready`: 준비 상태 확인
+  - `/health/live`: 생존 확인
+- [x] 환경 변수 및 시크릿 관리
+  - GitHub Secrets 구성
+  - GCP Secret Manager 설정
+  - DEPLOYMENT.md 상세 가이드 작성 (400+ 줄)
+- [x] 서비스 계정 및 IAM 권한 설정
+  - github-actions-deployer 서비스 계정
+  - Compute Engine 기본 계정 권한 구성
+  - Cloud Run Invoker 권한 설정
+- [x] 로깅 및 모니터링 준비
+  - Cloud Logging 자동 연동
+  - Error Reporting 준비
+  - Cloud Run 대시보드 구성
 
 ---
 
