@@ -10,6 +10,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { interviewAPI } from '@/lib/api';
 import toast from 'react-hot-toast';
 import axios from 'axios';
+import AIAvatar from '@/components/interview/AIAvatar';
 
 interface Message {
   role: 'AI' | 'USER';
@@ -37,6 +38,7 @@ function InterviewContent() {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
+  const [isAISpeaking, setIsAISpeaking] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -307,6 +309,8 @@ function InterviewContent() {
   // TTS: AI 응답을 음성으로 재생
   const speakText = async (text: string) => {
     try {
+      setIsAISpeaking(true);
+      
       const response = await axios.post(
         'http://localhost:8000/api/v1/ai/tts/speak-korean',
         {
@@ -326,11 +330,17 @@ function InterviewContent() {
       
       audio.onended = () => {
         URL.revokeObjectURL(audioUrl);  // 메모리 정리
+        setIsAISpeaking(false);
+      };
+      
+      audio.onerror = () => {
+        setIsAISpeaking(false);
       };
       
       await audio.play();
     } catch (error: any) {
       console.error('TTS 실패:', error);
+      setIsAISpeaking(false);
       // 음성 재생 실패는 치명적이지 않으므로 조용히 처리
     }
   };
@@ -408,6 +418,15 @@ function InterviewContent() {
 
       {/* 메시지 영역 */}
       <div className="flex h-[calc(100vh-140px)] overflow-hidden">
+        {/* AI 아바타 (좌측) */}
+        <div className="hidden lg:flex w-80 items-center justify-center bg-gray-800/50 p-8">
+          <AIAvatar 
+            isSpeaking={isAISpeaking}
+            emotion={isAISpeaking ? 'happy' : 'neutral'}
+            className="h-64 w-64"
+          />
+        </div>
+        
         {/* 웹캠 영역 (우측 상단) */}
         {isCameraOn && (
           <div className="absolute top-20 right-6 z-10">
