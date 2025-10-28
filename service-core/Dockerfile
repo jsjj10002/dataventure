@@ -1,8 +1,10 @@
 # Node.js 기반 Backend Core API Dockerfile
-FROM node:20-alpine AS base
+FROM node:20-slim AS base
 
-# Prisma를 위한 OpenSSL 설치
-RUN apk add --no-cache openssl1.1-compat libc6-compat
+# Prisma를 위한 OpenSSL 및 필수 라이브러리 설치
+RUN apt-get update && \
+    apt-get install -y openssl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
 # 의존성 설치 단계
 FROM base AS deps
@@ -38,9 +40,9 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# 보안을 위한 non-root 사용자 생성
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 expressjs
+# 보안을 위한 non-root 사용자 생성 (Debian)
+RUN groupadd --system --gid 1001 nodejs && \
+    useradd --system --uid 1001 --gid nodejs --shell /bin/bash expressjs
 
 # 빌드된 파일과 필요한 의존성 복사
 COPY --from=builder --chown=expressjs:nodejs /app/dist ./dist
