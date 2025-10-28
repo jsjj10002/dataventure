@@ -41,10 +41,10 @@ mediaRecorder.ondataavailable = (e) => {
 ```
 
 #### 3. STT (Speech-to-Text)
-- [ ] Whisper API 연동
-- [ ] 녹음된 음성을 텍스트로 변환
-- [ ] 실시간 또는 구간별 변환 선택
-- [ ] 한국어 인식 정확도 확인
+- [x] Whisper API 연동
+- [x] 녹음된 음성을 텍스트로 변환
+- [x] 실시간 또는 구간별 변환 선택
+- [x] 한국어 인식 정확도 확인
 
 **API 연동**:
 ```python
@@ -54,10 +54,10 @@ transcription = openai.Audio.transcribe("whisper-1", audio_file)
 ```
 
 #### 4. TTS (Text-to-Speech)
-- [ ] OpenAI TTS API 또는 Web Speech API
-- [ ] AI 응답을 음성으로 출력
-- [ ] 음성 속도, 톤 조절 가능
-- [ ] 한국어 음성 품질 확인
+- [x] OpenAI TTS API 연동
+- [x] AI 응답을 음성으로 출력
+- [x] 음성 속도, 톤 조절 가능
+- [x] 한국어 음성 품질 확인
 
 **API 연동**:
 ```python

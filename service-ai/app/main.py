@@ -18,10 +18,13 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# CORS 설정 (service-core에서만 접근)
+# CORS 설정 (service-core와 프론트엔드 접근)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8080"],  # service-core URL
+    allow_origins=[
+        "http://localhost:8080",  # service-core
+        "http://localhost:3000",  # app-web (프론트엔드)
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -53,7 +56,7 @@ async def health_check():
 
 
 # ===== AI API 라우터 =====
-from app.api import question, evaluation, matching, health
+from app.api import question, evaluation, matching, health, stt, tts
 
 # 헬스 체크
 app.include_router(health.router, tags=["헬스 체크"])
@@ -62,6 +65,8 @@ app.include_router(health.router, tags=["헬스 체크"])
 app.include_router(question.router, prefix="/internal/ai", tags=["Question Generation"])
 app.include_router(evaluation.router, prefix="/internal/ai", tags=["Evaluation"])
 app.include_router(matching.router, prefix="/internal/ai", tags=["Matching"])
+app.include_router(stt.router, prefix="/api/v1/ai/stt", tags=["STT (Speech-to-Text)"])
+app.include_router(tts.router, prefix="/api/v1/ai/tts", tags=["TTS (Text-to-Speech)"])
 
 
 if __name__ == "__main__":

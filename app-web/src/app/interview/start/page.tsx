@@ -147,6 +147,9 @@ function InterviewContent() {
       };
       setMessages((prev) => [...prev, newAiMessage]);
       
+      // AI 응답을 음성으로 재생
+      await speakText(aiMessage);
+      
       // 백엔드에 메시지 기록 저장
       await interviewAPI.addMessage(interviewId, {
         role: 'USER',
@@ -232,8 +235,8 @@ function InterviewContent() {
         const audioBlob = new Blob(chunks, { type: 'audio/webm' });
         setAudioChunks([...audioChunks, audioBlob]);
         
-        // TODO: STT로 음성을 텍스트로 변환
-        toast.success('녹음이 완료되었습니다. (STT 구현 예정)');
+        // STT로 음성을 텍스트로 변환
+        await transcribeAudio(audioBlob);
       };
       
       recorder.start();
@@ -261,6 +264,74 @@ function InterviewContent() {
       stopRecording();
     } else {
       startRecording();
+    }
+  };
+
+  // STT: 음성을 텍스트로 변환
+  const transcribeAudio = async (audioBlob: Blob) => {
+    try {
+      toast.loading('음성을 텍스트로 변환 중...', { id: 'stt' });
+      
+      // FormData로 오디오 파일 전송
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'recording.webm');
+      
+      const response = await axios.post(
+        'http://localhost:8000/api/v1/ai/stt/transcribe',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+      
+      const transcribedText = response.data.text;
+      
+      if (transcribedText && transcribedText.trim()) {
+        // 변환된 텍스트를 입력창에 넣기
+        setInputMessage(transcribedText);
+        toast.success('음성이 텍스트로 변환되었습니다!', { id: 'stt' });
+        
+        // 자동으로 전송 (선택사항)
+        // await handleSendMessage();
+      } else {
+        toast.error('음성을 인식하지 못했습니다.', { id: 'stt' });
+      }
+    } catch (error: any) {
+      console.error('STT 실패:', error);
+      toast.error('음성 변환에 실패했습니다.', { id: 'stt' });
+    }
+  };
+
+  // TTS: AI 응답을 음성으로 재생
+  const speakText = async (text: string) => {
+    try {
+      const response = await axios.post(
+        'http://localhost:8000/api/v1/ai/tts/speak-korean',
+        {
+          text,
+          voice: 'nova',  // AI 인터뷰에 적합한 밝은 여성 음성
+          model: 'tts-1',  // 빠른 응답
+          speed: 1.0
+        },
+        {
+          responseType: 'blob'
+        }
+      );
+      
+      // Blob을 오디오로 재생
+      const audioUrl = URL.createObjectURL(response.data);
+      const audio = new Audio(audioUrl);
+      
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);  // 메모리 정리
+      };
+      
+      await audio.play();
+    } catch (error: any) {
+      console.error('TTS 실패:', error);
+      // 음성 재생 실패는 치명적이지 않으므로 조용히 처리
     }
   };
 
