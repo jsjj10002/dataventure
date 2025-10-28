@@ -11,10 +11,10 @@
 ### 필수 구현 사항
 
 #### 1. 웹캠 연동
-- [ ] MediaDevices API 사용하여 사용자 카메라 접근
-- [ ] 화면 우측 상단에 사용자 얼굴 표시
-- [ ] 카메라 권한 요청 및 에러 처리
-- [ ] 카메라 On/Off 토글 기능
+- [x] MediaDevices API 사용하여 사용자 카메라 접근
+- [x] 화면 우측 상단에 사용자 얼굴 표시
+- [x] 카메라 권한 요청 및 에러 처리
+- [x] 카메라 On/Off 토글 기능
 
 **기술 스택**:
 ```javascript
@@ -26,11 +26,11 @@ const stream = await navigator.mediaDevices.getUserMedia({
 ```
 
 #### 2. 음성 녹음 (Web Audio API)
-- [ ] MediaRecorder API로 실시간 음성 녹음
-- [ ] 녹음 시작/중지 기능
-- [ ] 음성 데이터를 Blob으로 저장
-- [ ] 연습 모드: 채팅/음성 선택 가능
-- [ ] 실전 모드: 음성만 가능
+- [x] MediaRecorder API로 실시간 음성 녹음
+- [x] 녹음 시작/중지 기능
+- [x] 음성 데이터를 Blob으로 저장
+- [ ] 연습 모드: 채팅/음성 선택 가능 (UI 개선 필요)
+- [ ] 실전 모드: 음성만 가능 (모드별 분기 필요)
 
 **기술 스택**:
 ```javascript

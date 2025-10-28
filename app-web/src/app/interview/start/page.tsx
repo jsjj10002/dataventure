@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Mic, MicOff, Send, Loader2, Clock, User, Bot } from 'lucide-react';
+import { Mic, MicOff, Send, Loader2, Clock, User, Bot, Video, VideoOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -32,8 +32,15 @@ function InterviewContent() {
   const [isInterviewActive, setIsInterviewActive] = useState(true);
   const [interviewMode, setInterviewMode] = useState<'PRACTICE' | 'REAL'>('PRACTICE');
   
+  // 웹캠 & 음성
+  const [isCameraOn, setIsCameraOn] = useState(false);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   // 인증 확인
   useEffect(() => {
@@ -158,20 +165,114 @@ function InterviewContent() {
     }
   };
 
-  // 음성 녹음 (간단한 구현)
-  const handleToggleRecording = () => {
-    if (isRecording) {
-      // 녹음 중지
-      setIsRecording(false);
-      toast.success('녹음이 중지되었습니다.');
-    } else {
-      // 녹음 시작
-      setIsRecording(true);
-      toast.success('녹음이 시작되었습니다.');
+  // 웹캠 시작
+  const startCamera = async () => {
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
       
-      // TODO: 실제 Web Audio API 또는 라이브러리 사용
+      setStream(mediaStream);
+      setIsCameraOn(true);
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+      }
+      
+      toast.success('카메라가 활성화되었습니다.');
+    } catch (error) {
+      console.error('카메라 접근 실패:', error);
+      toast.error('카메라 접근 권한을 허용해주세요.');
     }
   };
+
+  // 웹캠 중지
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+      setIsCameraOn(false);
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      
+      toast.success('카메라가 비활성화되었습니다.');
+    }
+  };
+
+  // 웹캠 토글
+  const handleToggleCamera = () => {
+    if (isCameraOn) {
+      stopCamera();
+    } else {
+      startCamera();
+    }
+  };
+
+  // 음성 녹음 시작
+  const startRecording = () => {
+    if (!stream) {
+      toast.error('먼저 카메라를 활성화해주세요.');
+      return;
+    }
+    
+    try {
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+      
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+        setAudioChunks([...audioChunks, audioBlob]);
+        
+        // TODO: STT로 음성을 텍스트로 변환
+        toast.success('녹음이 완료되었습니다. (STT 구현 예정)');
+      };
+      
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+      toast.success('녹음이 시작되었습니다.');
+    } catch (error) {
+      console.error('녹음 시작 실패:', error);
+      toast.error('녹음을 시작할 수 없습니다.');
+    }
+  };
+
+  // 음성 녹음 중지
+  const stopRecording = () => {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      setMediaRecorder(null);
+    }
+  };
+
+  // 음성 녹음 토글
+  const handleToggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
+  // 컴포넌트 언마운트 시 정리
+  useEffect(() => {
+    return () => {
+      stopCamera();
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, []);
 
   // 인터뷰 종료
   const handleEndInterview = async () => {
@@ -236,6 +337,31 @@ function InterviewContent() {
 
       {/* 메시지 영역 */}
       <div className="flex h-[calc(100vh-140px)] overflow-hidden">
+        {/* 웹캠 영역 (우측 상단) */}
+        {isCameraOn && (
+          <div className="absolute top-20 right-6 z-10">
+            <div className="relative rounded-lg overflow-hidden border-2 border-primary shadow-lg">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-64 h-48 object-cover bg-gray-800"
+              />
+              <div className="absolute top-2 right-2">
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={handleToggleCamera}
+                  className="h-8 w-8 p-0"
+                >
+                  <VideoOff className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+        
         {/* 채팅 영역 */}
         <div className="flex-1 overflow-y-auto p-6">
           <div className="mx-auto max-w-4xl space-y-4">
@@ -284,6 +410,19 @@ function InterviewContent() {
       {/* 입력 영역 */}
       <div className="border-t border-gray-700 bg-gray-800 px-6 py-4">
         <div className="mx-auto flex max-w-4xl items-end gap-3">
+          {/* 카메라 토글 버튼 */}
+          <Button
+            type="button"
+            size="lg"
+            variant={isCameraOn ? 'default' : 'outline'}
+            onClick={handleToggleCamera}
+            disabled={!isInterviewActive}
+            className="shrink-0"
+            title={isCameraOn ? '카메라 끄기' : '카메라 켜기'}
+          >
+            {isCameraOn ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
+          </Button>
+          
           {/* 음성 녹음 버튼 */}
           <Button
             type="button"
@@ -292,6 +431,7 @@ function InterviewContent() {
             onClick={handleToggleRecording}
             disabled={!isInterviewActive}
             className="shrink-0"
+            title={isRecording ? '녹음 중지' : '녹음 시작'}
           >
             {isRecording ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
           </Button>
