@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/stores/authStore';
 import apiClient from '@/lib/api-client';
+import toast from 'react-hot-toast';
 
 interface JobPosting {
   id: string;
@@ -28,8 +30,10 @@ interface JobPosting {
 
 export default function JobDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
+  const { user, isAuthenticated } = useAuthStore();
   const [job, setJob] = useState<JobPosting | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isApplying, setIsApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -48,6 +52,39 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
       setError('채용 공고를 불러올 수 없습니다.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // 지원하기
+  const handleApply = async () => {
+    if (!isAuthenticated) {
+      toast.error('로그인이 필요합니다.');
+      router.push('/auth/login');
+      return;
+    }
+
+    if (user?.role !== 'CANDIDATE') {
+      toast.error('구직자만 지원할 수 있습니다.');
+      return;
+    }
+
+    setIsApplying(true);
+
+    try {
+      await apiClient.post('/api/v1/applications', {
+        jobPostingId: params.id,
+        coverLetter: '', // 추후 자기소개서 입력 모달 추가 가능
+      });
+
+      toast.success('지원서가 제출되었습니다!');
+      // 지원 내역 페이지로 이동 (추후 구현)
+      // router.push('/applications/my');
+    } catch (error: any) {
+      console.error('지원 실패:', error);
+      const errorMessage = error.response?.data?.message || '지원에 실패했습니다.';
+      toast.error(errorMessage);
+    } finally {
+      setIsApplying(false);
     }
   };
 
@@ -186,6 +223,13 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
         {/* 액션 버튼 */}
         <div className="flex gap-4">
           <button
+            onClick={handleApply}
+            disabled={isApplying}
+            className="flex-1 px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isApplying ? '지원 중...' : '지원하기'}
+          </button>
+          <button
             onClick={() => router.push('/interview')}
             className="flex-1 px-6 py-3 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors"
           >
@@ -193,7 +237,7 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
           </button>
           <button
             onClick={() => router.push('/jobs')}
-            className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition-colors"
+            className="px-6 py-3 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition-colors"
           >
             목록으로
           </button>

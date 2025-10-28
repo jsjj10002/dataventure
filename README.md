@@ -1,8 +1,34 @@
 # flex-AI-Recruiter
 
-> **버전**: v0.9 (Sprint 8-9 완료)  
-> **업데이트**: 2025-10-28  
-> **상태**: ✅ 프론트엔드 완성, ⏳ API 연동 필요
+> **버전**: v0.95 (Phase 5 완료)  
+> **최종 업데이트**: 2025-10-28  
+> **상태**: ✅ 음성/영상 인터뷰 완성, 🔧 성능 최적화 진행 중
+
+---
+
+## 🔥 **최신 업데이트** (v0.95 - 2025-10-28)
+
+### 즉시 수정 완료 ✓
+- ✅ **STT API 수정** - ResponseValidationError 해결 (404 에러 수정)
+- ✅ **음성 중복 재생 수정** - 메아리 현상 완전 제거
+- ✅ **UI 가림 현상 해결** - 헤더 z-index 최적화
+- ✅ **TTS 음질 개선** - 'alloy' → 'nova' (더 자연스러운 목소리)
+- ✅ **채팅/음성 모드 통합** - 모든 모드에서 AI 먼저 음성 인사
+- ✅ **로딩 UX 개선** - 장비 확인 후 인터뷰 시작 로딩 화면 추가
+- ✅ **3D 아바타 대폭 업그레이드** - 전문가급 자연스러운 외모 (피부톤, 머리카락, 표정)
+
+### 기술적 개선사항
+- 🎨 **3D 렌더링**: Three.js r169 + React Three Fiber 8.17 (React 18 호환)
+- 💡 **조명 시스템**: 3점 조명 + 추가 채광 (6개 light source)
+- 🎤 **오디오 관리**: currentAudioRef를 통한 중복 방지 시스템
+- 📱 **반응형 UI**: pointer-events 최적화로 인터랙션 개선
+
+### 알려진 이슈
+- ⚠️ **Evaluation API 404** - Backend 구현 필요
+- ⚠️ **질문 생성 반복** - Socket.IO 이벤트 핸들러 디버깅 필요  
+- ⏱️ **응답 지연** (4~10초) - Streaming API 구현으로 개선 예정
+
+📖 **상세 내역**: [`docs/CRITICAL_FIXES_REPORT.md`](./docs/CRITICAL_FIXES_REPORT.md)
 
 ---
 
@@ -125,6 +151,7 @@
 
 ### Backend AI (Python)
 - **Framework**: FastAPI
+- **Package Manager**: uv (Rust 기반, pip 대비 10-100배 빠른 패키지 설치)
 - **LLM**: OpenAI GPT-5 (질문 생성, 평가, 매칭 근거) — `OPENAI_MODEL`로 모델 교체 가능
   - 주의: 일부 모델은 `temperature`, `max_tokens`를 지원하지 않는다. 현재 코드는 모델 호환을 위해 해당 옵션을 사용하지 않는다.
 - **Embedding**: Sentence-Transformers (`jhgan/ko-sbert-nli`)
@@ -223,7 +250,64 @@ flex-AI-Recruiter/
 
 ## 🚀 시작하기 (Sprint 8-9 업데이트)
 
-### ⚡ 빠른 시작 (5분)
+### 🐳 Docker Compose로 한번에 실행 (가장 간단!)
+
+#### 방법 1: 배치 스크립트 (Windows, 가장 쉬움)
+
+```bash
+# 실행
+start-all.bat
+
+# 중지
+stop-all.bat
+```
+
+**자동으로 확인**:
+- Docker Desktop 실행 여부
+- 환경 변수 파일 존재 여부
+- 서비스 상태 및 접속 정보 출력
+
+#### 방법 2: Docker Compose 명령어 직접 사용
+
+```bash
+# 1. 환경 변수 설정 (최초 1회)
+# service-ai/.env 파일에 OPENAI_API_KEY 설정 필요
+
+# 2. 모든 서비스 실행 (PostgreSQL + service-core + service-ai + app-web)
+docker-compose up -d
+
+# 3. 로그 확인
+docker-compose logs -f
+
+# 4. 서비스 상태 확인
+docker ps
+
+# 5. 중지
+docker-compose down
+```
+
+**접속**:
+- 프론트엔드: http://localhost:3000
+- 백엔드 API: http://localhost:8080
+- AI API 문서: http://localhost:8000/docs
+- PostgreSQL: localhost:5432
+
+**주의사항**:
+- 첫 실행 시 Docker 이미지 빌드 소요 (uv 사용으로 pip 대비 10-100배 빠름)
+  - AI 서비스: 2-3분 (uv 패키지 관리자 사용)
+  - Core 서비스: 3-5분
+  - Web 서비스: 2-3분
+- `service-ai/.env`에 `OPENAI_API_KEY` 설정 필수
+- 데이터베이스 마이그레이션은 자동으로 실행됨
+- Hugging Face 모델은 한 번만 다운로드되고 캐시에 저장됨 (재실행 시 즉시 시작)
+
+**컴퓨터 부팅 시 자동 실행 (선택사항)**:
+1. `Win + R` → `shell:startup` 입력
+2. `start-all.bat`의 바로가기를 시작 폴더에 복사
+
+---
+
+### ⚡ 빠른 시작 (5분) - 로컬 개발용
 
 **터미널에서 실행**:
 ```bash

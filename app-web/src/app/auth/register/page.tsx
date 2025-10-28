@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { UserPlus, Mail, Lock, User, Building2, Loader2, CheckCircle } from 'lucide-react';
+import { UserPlus, Mail, Lock, User, Building2, Loader2, CheckCircle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,6 +20,12 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState<'CANDIDATE' | 'RECRUITER'>('CANDIDATE');
+  
+  // 비밀번호 검증 규칙
+  const passwordRules = {
+    minLength: password.length >= 6,
+    hasMatch: password.length > 0 && confirmPassword.length > 0 && password === confirmPassword,
+  };
 
   // 이미 로그인된 경우 대시보드로 리다이렉트
   useEffect(() => {
@@ -60,13 +66,17 @@ export default function RegisterPage() {
       toast.success('회원가입 성공! 프로필을 작성해주세요.');
       
       // 프로필 작성 페이지로 이동
-      if (role === 'CANDIDATE') {
-        router.push('/profile/candidate');
-      } else {
-        router.push('/profile/recruiter');
-      }
-    } catch (error) {
-      // 에러는 store에서 처리됨
+      setTimeout(() => {
+        if (role === 'CANDIDATE') {
+          router.push('/profile/candidate');
+        } else {
+          router.push('/profile/recruiter');
+        }
+      }, 500);
+    } catch (error: any) {
+      // 에러 메시지 표시
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || '회원가입에 실패했습니다.';
+      toast.error(errorMessage);
     }
   };
 
@@ -210,6 +220,19 @@ export default function RegisterPage() {
                     required
                   />
                 </div>
+                {/* 비밀번호 규칙 표시 (입력 시작 후에만) */}
+                {password.length > 0 && (
+                  <div className="mt-2 space-y-1.5 rounded-md bg-gray-50 p-3 text-sm">
+                    <div className={`flex items-center gap-2 ${passwordRules.minLength ? 'text-green-600' : 'text-red-600'}`}>
+                      {passwordRules.minLength ? (
+                        <CheckCircle className="h-4 w-4" />
+                      ) : (
+                        <X className="h-4 w-4" />
+                      )}
+                      <span>최소 6자 이상</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 비밀번호 확인 */}
@@ -228,8 +251,21 @@ export default function RegisterPage() {
                     required
                   />
                 </div>
-                {password && confirmPassword && password !== confirmPassword && (
-                  <p className="text-sm text-red-600">비밀번호가 일치하지 않습니다.</p>
+                {/* 비밀번호 일치 여부 표시 */}
+                {confirmPassword.length > 0 && (
+                  <div className="mt-2">
+                    {passwordRules.hasMatch ? (
+                      <div className="flex items-center gap-2 text-sm text-green-600">
+                        <CheckCircle className="h-4 w-4" />
+                        <span>비밀번호가 일치합니다</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-sm text-red-600">
+                        <X className="h-4 w-4" />
+                        <span>비밀번호가 일치하지 않습니다</span>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 

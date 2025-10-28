@@ -34,7 +34,7 @@ export default function RecruiterProfilePage() {
   // 인증 확인
   useEffect(() => {
     if (!isAuthenticated) {
-      router.push('/login');
+      router.push('/auth/login');
       return;
     }
     
@@ -53,7 +53,7 @@ export default function RecruiterProfilePage() {
     
     setIsFetching(true);
     try {
-      const response = await profileAPI.getRecruiterProfile(user.id);
+      const response = await profileAPI.getMyRecruiterProfile();
       const profile = response.data;
       
       setProfileId(profile.id);
@@ -64,8 +64,22 @@ export default function RecruiterProfilePage() {
       setPosition(profile.position || '');
       setDepartment(profile.department || '');
       setIdealCandidate(profile.idealCandidate || '');
-      setHiringPositions(profile.hiringPositionsJson ? JSON.parse(profile.hiringPositionsJson) : []);
+      
+      // hiringPositionsJson 파싱 (문자열 또는 배열 처리)
+      try {
+        if (profile.hiringPositionsJson) {
+          if (typeof profile.hiringPositionsJson === 'string') {
+            setHiringPositions(JSON.parse(profile.hiringPositionsJson));
+          } else if (Array.isArray(profile.hiringPositionsJson)) {
+            setHiringPositions(profile.hiringPositionsJson);
+          }
+        }
+      } catch (parseError) {
+        console.error('hiringPositionsJson 파싱 오류:', parseError);
+        setHiringPositions([]);
+      }
     } catch (error: any) {
+      console.error('프로필 로딩 오류:', error);
       if (error.response?.status !== 404) {
         toast.error('프로필을 불러오는데 실패했습니다.');
       }
@@ -168,17 +182,18 @@ export default function RecruiterProfilePage() {
                       onChange={handleLogoUpload}
                       disabled={uploadingLogo}
                     />
-                    <label htmlFor="logo-upload">
-                      <Button type="button" variant="outline" disabled={uploadingLogo} asChild>
-                        <span>
-                          {uploadingLogo ? (
-                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> 업로드 중...</>
-                          ) : (
-                            <><Upload className="mr-2 h-4 w-4" /> 로고 업로드</>
-                          )}
-                        </span>
-                      </Button>
-                    </label>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      disabled={uploadingLogo}
+                      onClick={() => document.getElementById('logo-upload')?.click()}
+                    >
+                      {uploadingLogo ? (
+                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> 업로드 중...</>
+                      ) : (
+                        <><Upload className="mr-2 h-4 w-4" /> 로고 업로드</>
+                      )}
+                    </Button>
                   </div>
                 </div>
               </div>

@@ -1,8 +1,15 @@
-# Python 기반 AI Engine Dockerfile
+# Python 기반 AI Engine Dockerfile (uv 사용)
 FROM python:3.11-slim AS base
 
 # 작업 디렉토리 설정
 WORKDIR /app
+
+# Python 환경 설정
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# uv 바이너리를 공식 distroless 이미지에서 복사 (Astral 공식 권장 방법)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
 # 시스템 의존성 설치
 RUN apt-get update && apt-get install -y \
@@ -14,10 +21,9 @@ RUN apt-get update && apt-get install -y \
 # 의존성 설치 단계
 FROM base AS deps
 
-# requirements.txt 복사 및 설치
+# requirements.txt 복사 및 설치 (uv 사용)
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN uv pip install --system --no-cache -r requirements.txt
 
 # 실행 단계
 FROM base AS runner

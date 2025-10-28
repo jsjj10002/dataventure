@@ -11,7 +11,18 @@ const nextConfig = {
 
   // 이미지 최적화 설정
   images: {
-    domains: ['storage.googleapis.com'], // GCP Cloud Storage
+    domains: ['storage.googleapis.com', 'localhost'], // GCP Cloud Storage + localhost
+    unoptimized: true, // 로컬 개발 시 이미지 최적화 비활성화
+  },
+
+  // 업로드 파일 프록시
+  async rewrites() {
+    return [
+      {
+        source: '/uploads/:path*',
+        destination: 'http://localhost:8080/uploads/:path*',
+      },
+    ];
   },
 
   // Webpack 설정 (필요 시)

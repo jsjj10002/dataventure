@@ -45,8 +45,10 @@ export default function LoginPage() {
       await login({ email, password });
       toast.success('로그인 성공!');
       router.push('/dashboard');
-    } catch (error) {
-      // 에러는 store에서 처리됨
+    } catch (error: any) {
+      // 에러 메시지 표시
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || '로그인에 실패했습니다.';
+      toast.error(errorMessage);
     }
   };
 

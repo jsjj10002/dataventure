@@ -33,7 +33,7 @@ export default function EvaluationPage() {
   useEffect(() => {
     if (!isAuthenticated) {
       toast.error('로그인이 필요합니다.');
-      router.push('/login');
+      router.push('/auth/login');
       return;
     }
     

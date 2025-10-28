@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '@/stores/authStore';
 import { profileAPI, uploadAPI, CandidateProfile } from '@/lib/api';
+import ResumeUpload from '@/components/profile/ResumeUpload';
 import toast from 'react-hot-toast';
 
 export default function CandidateProfilePage() {
@@ -41,7 +42,7 @@ export default function CandidateProfilePage() {
   // 인증 확인
   useEffect(() => {
     if (!isAuthenticated) {
-      router.push('/login');
+      router.push('/auth/login');
       return;
     }
     
@@ -54,17 +55,30 @@ export default function CandidateProfilePage() {
     
     setIsFetching(true);
     try {
-      const response = await profileAPI.getCandidateProfile(user.id);
+      const response = await profileAPI.getMyCandidateProfile();
       const profile = response.data;
       
       setProfileId(profile.id);
       setPhotoUrl(profile.photoUrl || '');
       setBio(profile.bio || '');
-      setEducation(profile.educationJson ? JSON.parse(profile.educationJson) : []);
-      setExperience(profile.experienceJson ? JSON.parse(profile.experienceJson) : []);
-      setProjects(profile.projectsJson ? JSON.parse(profile.projectsJson) : []);
-      setSkills(profile.skillsJson ? JSON.parse(profile.skillsJson) : []);
-      setPortfolioUrl(profile.portfolioUrl || '');
+      
+      // JSON 필드 파싱 (문자열인 경우에만)
+      try {
+        setEducation(profile.educationJson ? (typeof profile.educationJson === 'string' ? JSON.parse(profile.educationJson) : profile.educationJson) : []);
+      } catch { setEducation([]); }
+      
+      try {
+        setExperience(profile.experienceJson ? (typeof profile.experienceJson === 'string' ? JSON.parse(profile.experienceJson) : profile.experienceJson) : []);
+      } catch { setExperience([]); }
+      
+      try {
+        setProjects(profile.projectsJson ? (typeof profile.projectsJson === 'string' ? JSON.parse(profile.projectsJson) : profile.projectsJson) : []);
+      } catch { setProjects([]); }
+      
+      // skills는 배열로 반환됨
+      setSkills(Array.isArray(profile.skillsJson) ? profile.skillsJson : []);
+      
+      setPortfolioUrl(profile.portfolioFileUrl || ''); // portfolioFileUrl로 변경
       setBlogUrl(profile.blogUrl || '');
       setGithubUrl(profile.githubUrl || '');
       setLinkedinUrl(profile.linkedinUrl || '');
@@ -173,7 +187,7 @@ export default function CandidateProfilePage() {
         experienceJson: experience,
         projectsJson: projects,
         skillsJson: skills,
-        portfolioUrl,
+        portfolioFileUrl: portfolioUrl, // 백엔드 필드명에 맞춤
         blogUrl,
         githubUrl,
         linkedinUrl,
@@ -477,6 +491,21 @@ export default function CandidateProfilePage() {
                   </Badge>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* 이력서 업로드 */}
+          <Card>
+            <CardHeader>
+              <CardTitle>이력서</CardTitle>
+              <CardDescription>PDF 또는 DOCX 형식의 이력서를 업로드하세요</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResumeUpload
+                currentResumeUrl={resumeUrl}
+                onUploadSuccess={(url) => setResumeUrl(url)}
+                onDelete={() => setResumeUrl('')}
+              />
             </CardContent>
           </Card>
 

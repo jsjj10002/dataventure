@@ -2,15 +2,13 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Mic, MicOff, Send, Loader2, Clock, User, Bot, Video, VideoOff } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX, Clock, X, MessageSquare, Subtitles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
 import { useAuthStore } from '@/stores/authStore';
 import { interviewAPI } from '@/lib/api';
 import toast from 'react-hot-toast';
-import axios from 'axios';
-import AIAvatar from '@/components/interview/AIAvatar';
+import AIAvatar3D from '@/components/interview/AIAvatar3D';
+import { getSocket, connectSocket, onSocketEvent, offSocketEvent, emitSocketEvent, disconnectSocket } from '@/lib/socket-client';
 
 interface Message {
   role: 'AI' | 'USER';
@@ -22,6 +20,7 @@ function InterviewContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const interviewId = searchParams.get('id');
+  const voiceModeParam = searchParams.get('voiceMode'); // URL 파라미터에서 모드 읽기
   
   const { user, isAuthenticated } = useAuthStore();
   
@@ -29,7 +28,7 @@ function InterviewContent() {
   const [inputMessage, setInputMessage] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(15 * 60); // 15분 (초)
+  const [timeLeft, setTimeLeft] = useState(15 * 60);
   const [isInterviewActive, setIsInterviewActive] = useState(true);
   const [interviewMode, setInterviewMode] = useState<'PRACTICE' | 'REAL'>('PRACTICE');
   
@@ -40,15 +39,23 @@ function InterviewContent() {
   const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
   const [isAISpeaking, setIsAISpeaking] = useState(false);
   
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  // UI 모드 - URL 파라미터에서 초기화 (기본값: true)
+  const [isVoiceMode, setIsVoiceMode] = useState(voiceModeParam === 'true' || voiceModeParam === null); // 음성/채팅 모드
+  const [showSubtitles, setShowSubtitles] = useState(false); // 자막 표시
+  const [currentSubtitle, setCurrentSubtitle] = useState('');
+  
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null); // 현재 재생 중인 오디오 추적
 
   // 인증 확인
   useEffect(() => {
     if (!isAuthenticated) {
       toast.error('로그인이 필요합니다.');
-      router.push('/login');
+      router.push('/auth/login');
       return;
     }
     
@@ -59,9 +66,23 @@ function InterviewContent() {
     }
     
     loadInterview();
-  }, [isAuthenticated, interviewId]);
+    
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      stopCamera();
+      disconnectSocket();
+    };
+  }, []);
 
-  // 인터뷰 정보 로드
+  // 마우스 움직임 추적
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      setMousePosition({ x: e.clientX, y: e.clientY });
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
   const loadInterview = async () => {
     if (!interviewId) return;
     
@@ -72,15 +93,34 @@ function InterviewContent() {
       setInterviewMode(interview.mode);
       setTimeLeft(interview.timeLimitSeconds);
       
+      // 실전 모드는 음성 모드 고정
+      if (interview.mode === 'ACTUAL') {
+        setIsVoiceMode(true);
+      }
+      
       // AI 인사 메시지
+      const greeting = '안녕하세요! AI 면접관입니다. 편안하게 대화하듯이 답변해주시면 됩니다. 준비되셨나요?';
       setMessages([{
         role: 'AI',
-        content: '안녕하세요! AI 면접관입니다. 편안하게 대화하듯이 답변해주시면 됩니다. 준비되셨나요?',
+        content: greeting,
         timestamp: new Date(),
       }]);
       
+      // 자막 표시
+      if (showSubtitles) {
+        setCurrentSubtitle(greeting);
+      }
+      
+      // AI 인사말 음성 재생 (모든 모드에서 재생)
+      await speakText(greeting);
+      
       // 타이머 시작
       startTimer();
+      
+      // 모든 모드에서 웹캠 자동 시작 (권한 요청)
+      setTimeout(() => {
+        startCamera();
+      }, 500);
     } catch (error: any) {
       console.error('인터뷰 로드 실패:', error);
       toast.error('인터뷰를 불러오는데 실패했습니다.');
@@ -101,71 +141,63 @@ function InterviewContent() {
     }, 1000);
   };
 
-  // 타이머 정리
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
-  }, []);
-
-  // 메시지 자동 스크롤
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
   // 메시지 전송
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isSending || !interviewId) return;
     
     const userMessage = inputMessage.trim();
     setInputMessage('');
+    setIsSending(true);
     
     // 사용자 메시지 추가
-    const newUserMessage: Message = {
+    setMessages((prev) => [...prev, {
       role: 'USER',
       content: userMessage,
       timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, newUserMessage]);
-    
-    setIsSending(true);
+    }]);
     
     try {
-      // AI 서비스에 메시지 전송
-      const aiResponse = await axios.post(`http://localhost:8000/api/v1/ai/chat`, {
-        interviewId,
-        message: userMessage,
-      });
+      // Socket.IO를 통해 메시지 전송
+      const socket = getSocket();
+      if (!socket.connected) {
+        connectSocket();
+        await new Promise((resolve) => {
+          socket.once('connect', resolve);
+        });
+      }
       
-      const aiMessage = aiResponse.data.reply;
-      
-      // AI 응답 추가
-      const newAiMessage: Message = {
-        role: 'AI',
-        content: aiMessage,
-        timestamp: new Date(),
+      // AI 응답 수신 리스너 등록
+      const questionListener = async (data: any) => {
+        const aiMessage: Message = {
+          role: 'AI',
+          content: data.content,
+          timestamp: new Date(data.createdAt),
+        };
+        setMessages((prev) => [...prev, aiMessage]);
+        
+        // 자막 표시
+        if (showSubtitles) {
+          setCurrentSubtitle(data.content);
+        }
+        
+        // AI 응답을 항상 음성으로 재생 (채팅/음성 모드 모두)
+        await speakText(data.content);
+        
+        setIsSending(false);
+        offSocketEvent('interview:question', questionListener);
       };
-      setMessages((prev) => [...prev, newAiMessage]);
       
-      // AI 응답을 음성으로 재생
-      await speakText(aiMessage);
+      onSocketEvent('interview:question', questionListener);
       
-      // 백엔드에 메시지 기록 저장
-      await interviewAPI.addMessage(interviewId, {
-        role: 'USER',
+      // 메시지 전송
+      emitSocketEvent('interview:message', {
+        interviewId,
         content: userMessage,
-      });
-      
-      await interviewAPI.addMessage(interviewId, {
-        role: 'AI',
-        content: aiMessage,
+        contentType: 'TEXT',
       });
     } catch (error: any) {
       console.error('메시지 전송 실패:', error);
       toast.error('메시지 전송에 실패했습니다.');
-    } finally {
       setIsSending(false);
     }
   };
@@ -202,24 +234,13 @@ function InterviewContent() {
       if (videoRef.current) {
         videoRef.current.srcObject = null;
       }
-      
-      toast.success('카메라가 비활성화되었습니다.');
-    }
-  };
-
-  // 웹캠 토글
-  const handleToggleCamera = () => {
-    if (isCameraOn) {
-      stopCamera();
-    } else {
-      startCamera();
     }
   };
 
   // 음성 녹음 시작
-  const startRecording = () => {
+  const startRecording = async () => {
     if (!stream) {
-      toast.error('먼저 카메라를 활성화해주세요.');
+      toast.error('마이크 권한을 허용해주세요.');
       return;
     }
     
@@ -235,16 +256,13 @@ function InterviewContent() {
       
       recorder.onstop = async () => {
         const audioBlob = new Blob(chunks, { type: 'audio/webm' });
-        setAudioChunks([...audioChunks, audioBlob]);
-        
-        // STT로 음성을 텍스트로 변환
-        await transcribeAudio(audioBlob);
+        await sendAudioToSTT(audioBlob);
       };
       
       recorder.start();
       setMediaRecorder(recorder);
       setIsRecording(true);
-      toast.success('녹음이 시작되었습니다.');
+      setAudioChunks(chunks);
     } catch (error) {
       console.error('녹음 시작 실패:', error);
       toast.error('녹음을 시작할 수 없습니다.');
@@ -253,107 +271,89 @@ function InterviewContent() {
 
   // 음성 녹음 중지
   const stopRecording = () => {
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
       mediaRecorder.stop();
       setIsRecording(false);
-      setMediaRecorder(null);
     }
   };
 
-  // 음성 녹음 토글
-  const handleToggleRecording = () => {
-    if (isRecording) {
-      stopRecording();
-    } else {
-      startRecording();
-    }
-  };
-
-  // STT: 음성을 텍스트로 변환
-  const transcribeAudio = async (audioBlob: Blob) => {
+  // STT: 음성 → 텍스트
+  const sendAudioToSTT = async (audioBlob: Blob) => {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'recording.webm');
+    
     try {
-      toast.loading('음성을 텍스트로 변환 중...', { id: 'stt' });
+      const response = await fetch('http://localhost:8000/api/v1/ai/stt/transcribe', {
+        method: 'POST',
+        body: formData,
+      });
       
-      // FormData로 오디오 파일 전송
-      const formData = new FormData();
-      formData.append('audio', audioBlob, 'recording.webm');
+      if (!response.ok) throw new Error('STT 실패');
       
-      const response = await axios.post(
-        'http://localhost:8000/api/v1/ai/stt/transcribe',
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        }
-      );
-      
-      const transcribedText = response.data.text;
-      
-      if (transcribedText && transcribedText.trim()) {
-        // 변환된 텍스트를 입력창에 넣기
-        setInputMessage(transcribedText);
-        toast.success('음성이 텍스트로 변환되었습니다!', { id: 'stt' });
-        
-        // 자동으로 전송 (선택사항)
-        // await handleSendMessage();
-      } else {
-        toast.error('음성을 인식하지 못했습니다.', { id: 'stt' });
-      }
-    } catch (error: any) {
+      const data = await response.json();
+      setInputMessage(data.text);
+      toast.success('음성이 텍스트로 변환되었습니다!');
+    } catch (error) {
       console.error('STT 실패:', error);
-      toast.error('음성 변환에 실패했습니다.', { id: 'stt' });
+      toast.error('음성 인식에 실패했습니다.');
     }
   };
 
-  // TTS: AI 응답을 음성으로 재생
+  // TTS: 텍스트 → 음성
   const speakText = async (text: string) => {
+    if (!text) return;
+    
+    // 이전 오디오가 재생 중이면 중단 (중복 방지)
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+    
+    setIsAISpeaking(true);
+    
+    // 자막 표시
+    if (showSubtitles) {
+      setCurrentSubtitle(text);
+    }
+    
     try {
-      setIsAISpeaking(true);
+      const response = await fetch('http://localhost:8000/api/v1/ai/tts/speak-korean', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voice: 'nova', model: 'tts-1', speed: 1.0 }), // nova: 더 자연스러운 목소리
+      });
       
-      const response = await axios.post(
-        'http://localhost:8000/api/v1/ai/tts/speak-korean',
-        {
-          text,
-          voice: 'nova',  // AI 인터뷰에 적합한 밝은 여성 음성
-          model: 'tts-1',  // 빠른 응답
-          speed: 1.0
-        },
-        {
-          responseType: 'blob'
-        }
-      );
+      if (!response.ok) throw new Error('TTS 실패');
       
-      // Blob을 오디오로 재생
-      const audioUrl = URL.createObjectURL(response.data);
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
+      currentAudioRef.current = audio; // 현재 오디오 추적
       
       audio.onended = () => {
-        URL.revokeObjectURL(audioUrl);  // 메모리 정리
         setIsAISpeaking(false);
+        currentAudioRef.current = null;
+        // 자막 유지 (3초 후 지우기)
+        setTimeout(() => {
+          setCurrentSubtitle('');
+        }, 3000);
+        URL.revokeObjectURL(audioUrl);
       };
       
       audio.onerror = () => {
         setIsAISpeaking(false);
+        currentAudioRef.current = null;
+        setCurrentSubtitle('');
       };
       
       await audio.play();
-    } catch (error: any) {
+    } catch (error) {
       console.error('TTS 실패:', error);
       setIsAISpeaking(false);
-      // 음성 재생 실패는 치명적이지 않으므로 조용히 처리
+      currentAudioRef.current = null;
+      setCurrentSubtitle('');
     }
   };
-
-  // 컴포넌트 언마운트 시 정리
-  useEffect(() => {
-    return () => {
-      stopCamera();
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
-  }, []);
 
   // 인터뷰 종료
   const handleEndInterview = async () => {
@@ -361,29 +361,17 @@ function InterviewContent() {
     
     setIsInterviewActive(false);
     
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
-    
     try {
-      // 인터뷰 완료 처리
-      await interviewAPI.complete(interviewId, {
-        elapsedSeconds: 15 * 60 - timeLeft,
-      });
-      
-      toast.success('인터뷰가 종료되었습니다. 평가 중입니다...');
-      
-      // 평가 페이지로 이동 (평가는 비동기로 진행)
-      setTimeout(() => {
-        router.push(`/evaluation/${interviewId}`);
-      }, 2000);
+      await interviewAPI.complete(interviewId);
+      toast.success('인터뷰가 종료되었습니다. 평가 결과를 확인해주세요.');
+      router.push(`/evaluation/${interviewId}`);
     } catch (error: any) {
       console.error('인터뷰 종료 실패:', error);
-      toast.error('인터뷰 종료 처리에 실패했습니다.');
+      toast.error('인터뷰 종료에 실패했습니다.');
     }
   };
 
-  // 시간 포맷 (MM:SS)
+  // 시간 포맷
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -391,171 +379,171 @@ function InterviewContent() {
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900 text-white">
-      {/* 헤더 */}
-      <div className="flex items-center justify-between border-b border-gray-700 bg-gray-800 px-6 py-4">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-primary" />
-            <span className="text-xl font-mono font-semibold">
-              {formatTime(timeLeft)}
-            </span>
+    <div className="fixed inset-0 overflow-hidden">
+      {/* 배경 그라데이션 (중앙이 더 어둡게) */}
+      <div className="absolute inset-0 bg-gradient-radial from-gray-900 via-gray-950 to-black" />
+      
+      {/* 웹캠 (오른쪽 상단 고정) */}
+      {isCameraOn && (
+        <div className="absolute top-6 right-6 z-30">
+          <div className="relative rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl backdrop-blur-sm">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-64 h-48 object-cover bg-gray-900"
+            />
           </div>
-          <div className="h-4 w-px bg-gray-600" />
-          <span className="text-sm text-gray-400">
-            {interviewMode === 'PRACTICE' ? '연습 모드' : '실전 모드'}
+        </div>
+      )}
+      
+      {/* 헤더 */}
+      <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-8 py-3 bg-gradient-to-b from-black/40 to-transparent backdrop-blur-sm pointer-events-none">
+        {/* 버튼들만 pointer-events-auto 적용 */}
+        {/* 좌측: 타이머 + 모드 */}
+        <div className="flex items-center gap-6 pointer-events-auto">
+          {/* 타이머 */}
+          <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-black/40 backdrop-blur-md border border-white/20 shadow-lg">
+            <Clock className="h-6 w-6 text-blue-400 animate-pulse" />
+            <div className="flex flex-col">
+              <span className="text-xs text-white/60 uppercase tracking-wider">남은 시간</span>
+              <span className="text-3xl font-mono font-bold text-white tracking-wider">
+                {formatTime(timeLeft)}
+              </span>
+            </div>
+          </div>
+          
+          {/* 구분선 */}
+          <div className="h-10 w-px bg-white/20" />
+          
+          {/* 모드 표시 */}
+          <span className="text-sm text-white/80 font-medium px-4 py-2 rounded-lg bg-white/10 backdrop-blur-sm">
+            {interviewMode === 'PRACTICE' ? '🎯 연습 모드' : '🔥 실전 모드'}
           </span>
         </div>
         
-        <Button
-          variant="destructive"
-          onClick={handleEndInterview}
-          disabled={!isInterviewActive}
-        >
-          인터뷰 종료
-        </Button>
-      </div>
-
-      {/* 메시지 영역 */}
-      <div className="flex h-[calc(100vh-140px)] overflow-hidden">
-        {/* AI 아바타 (좌측) */}
-        <div className="hidden lg:flex w-80 items-center justify-center bg-gray-800/50 p-8">
-          <AIAvatar 
-            isSpeaking={isAISpeaking}
-            emotion={isAISpeaking ? 'happy' : 'neutral'}
-            className="h-64 w-64"
-          />
+        {/* 우측: 자막 + 종료 버튼 */}
+        <div className="flex items-center gap-3 pointer-events-auto">
+          {/* 자막 토글 */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowSubtitles(!showSubtitles)}
+            className="text-white hover:bg-white/20 backdrop-blur-sm"
+          >
+            <Subtitles className="h-4 w-4 mr-2" />
+            {showSubtitles ? '자막 끄기' : '자막 켜기'}
+          </Button>
+          
+          {/* 종료 버튼 */}
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleEndInterview}
+            disabled={!isInterviewActive}
+            className="shadow-lg"
+          >
+            <X className="h-4 w-4 mr-2" />
+            인터뷰 종료
+          </Button>
         </div>
-        
-        {/* 웹캠 영역 (우측 상단) */}
-        {isCameraOn && (
-          <div className="absolute top-20 right-6 z-10">
-            <div className="relative rounded-lg overflow-hidden border-2 border-primary shadow-lg">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-64 h-48 object-cover bg-gray-800"
-              />
-              <div className="absolute top-2 right-2">
+      </div>
+      
+      {/* 중앙 3D 캐릭터 */}
+      <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+        <AIAvatar3D 
+          isSpeaking={isAISpeaking}
+          emotion={isAISpeaking ? 'happy' : 'neutral'}
+          className="w-full h-full"
+          mousePosition={mousePosition}
+        />
+      </div>
+      
+      {/* 자막 (하단 중앙) */}
+      {showSubtitles && currentSubtitle && (
+        <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2 z-20 max-w-4xl px-8">
+          <div className="bg-black/90 text-white text-center px-8 py-4 rounded-lg text-lg font-medium shadow-2xl">
+            {currentSubtitle}
+          </div>
+        </div>
+      )}
+      
+      {/* 하단 컨트롤 영역 */}
+      <div className="absolute bottom-0 left-0 right-0 z-10 pb-8 pt-16 bg-gradient-to-t from-black/70 via-black/30 to-transparent">
+        <div className="max-w-3xl mx-auto px-4">
+          {isVoiceMode ? (
+            /* 음성 모드: 세련된 마이크 버튼 */
+            <div className="flex flex-col items-center justify-center gap-6">
+              <div className="relative">
+                {/* 펄스 애니메이션 (녹음 중) */}
+                {isRecording && (
+                  <>
+                    <div className="absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
+                    <div className="absolute inset-0 rounded-full bg-red-500 opacity-30 animate-pulse" />
+                  </>
+                )}
+                
+                {/* 마이크 버튼 */}
                 <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={handleToggleCamera}
-                  className="h-8 w-8 p-0"
+                  size="lg"
+                  onClick={isRecording ? stopRecording : startRecording}
+                  disabled={!isInterviewActive || isSending}
+                  className={`relative h-32 w-32 rounded-full shadow-2xl transition-all duration-300 ${
+                    isRecording
+                      ? 'bg-gradient-to-br from-red-500 to-red-700 hover:from-red-600 hover:to-red-800 scale-110'
+                      : 'bg-gradient-to-br from-primary-500 to-primary-700 hover:from-primary-600 hover:to-primary-800 hover:scale-110'
+                  }`}
                 >
-                  <VideoOff className="h-4 w-4" />
+                  {isRecording ? (
+                    <MicOff className="h-16 w-16" />
+                  ) : (
+                    <Mic className="h-16 w-16" />
+                  )}
                 </Button>
               </div>
-            </div>
-          </div>
-        )}
-        
-        {/* 채팅 영역 */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="mx-auto max-w-4xl space-y-4">
-            {messages.map((msg, index) => (
-              <div
-                key={index}
-                className={`flex items-start gap-3 ${
-                  msg.role === 'USER' ? 'flex-row-reverse' : ''
-                }`}
-              >
-                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
-                  msg.role === 'AI' ? 'bg-primary' : 'bg-gray-600'
-                }`}>
-                  {msg.role === 'AI' ? <Bot className="h-5 w-5" /> : <User className="h-5 w-5" />}
-                </div>
-                
-                <div className={`max-w-[70%] rounded-2xl px-4 py-3 ${
-                  msg.role === 'AI' 
-                    ? 'bg-gray-700 text-white' 
-                    : 'bg-primary text-white'
-                }`}>
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
-                  <p className="mt-1 text-xs opacity-60">
-                    {msg.timestamp.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+              
+              {/* 상태 텍스트 */}
+              <div className="text-center">
+                {isRecording ? (
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded-full bg-red-500 animate-pulse" />
+                    <p className="text-white font-medium text-lg">녹음 중...</p>
+                  </div>
+                ) : (
+                  <p className="text-white/80 font-medium">
+                    마이크 버튼을 눌러 답변하세요
                   </p>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* 채팅 모드: Glass UI 입력바 */
+            <div className="relative">
+              <div className="backdrop-blur-xl bg-white/10 rounded-3xl border border-white/20 shadow-2xl p-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={inputMessage}
+                    onChange={(e) => setInputMessage(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                    placeholder="메시지를 입력하세요..."
+                    disabled={!isInterviewActive || isSending}
+                    className="flex-1 bg-transparent text-white placeholder-white/50 px-6 py-4 outline-none text-lg"
+                  />
+                  <Button
+                    onClick={handleSendMessage}
+                    disabled={!inputMessage.trim() || isSending || !isInterviewActive}
+                    size="lg"
+                    className="rounded-2xl px-8 shadow-lg"
+                  >
+                    <MessageSquare className="h-5 w-5 mr-2" />
+                    전송
+                  </Button>
                 </div>
               </div>
-            ))}
-            
-            {isSending && (
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary">
-                  <Bot className="h-5 w-5" />
-                </div>
-                <div className="max-w-[70%] rounded-2xl bg-gray-700 px-4 py-3">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                </div>
-              </div>
-            )}
-            
-            <div ref={messagesEndRef} />
-          </div>
-        </div>
-      </div>
-
-      {/* 입력 영역 */}
-      <div className="border-t border-gray-700 bg-gray-800 px-6 py-4">
-        <div className="mx-auto flex max-w-4xl items-end gap-3">
-          {/* 카메라 토글 버튼 */}
-          <Button
-            type="button"
-            size="lg"
-            variant={isCameraOn ? 'default' : 'outline'}
-            onClick={handleToggleCamera}
-            disabled={!isInterviewActive}
-            className="shrink-0"
-            title={isCameraOn ? '카메라 끄기' : '카메라 켜기'}
-          >
-            {isCameraOn ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
-          </Button>
-          
-          {/* 음성 녹음 버튼 */}
-          <Button
-            type="button"
-            size="lg"
-            variant={isRecording ? 'destructive' : 'outline'}
-            onClick={handleToggleRecording}
-            disabled={!isInterviewActive}
-            className="shrink-0"
-            title={isRecording ? '녹음 중지' : '녹음 시작'}
-          >
-            {isRecording ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-          </Button>
-          
-          {/* 텍스트 입력 */}
-          <Textarea
-            placeholder="메시지를 입력하세요..."
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSendMessage();
-              }
-            }}
-            disabled={!isInterviewActive || isSending}
-            rows={2}
-            className="flex-1 resize-none bg-gray-700 text-white placeholder:text-gray-400"
-          />
-          
-          {/* 전송 버튼 */}
-          <Button
-            type="button"
-            size="lg"
-            onClick={handleSendMessage}
-            disabled={!isInterviewActive || isSending || !inputMessage.trim()}
-            className="shrink-0"
-          >
-            {isSending ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <Send className="h-5 w-5" />
-            )}
-          </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -566,7 +554,7 @@ export default function InterviewStartPage() {
   return (
     <Suspense fallback={
       <div className="fixed inset-0 bg-gray-900 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-white" />
+        <div className="text-white text-xl">로딩 중...</div>
       </div>
     }>
       <InterviewContent />

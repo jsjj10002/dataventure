@@ -53,12 +53,10 @@ export default function CandidateDashboardPage() {
     try {
       // 프로필 로드
       try {
-        const profileRes = await profileAPI.getCandidateProfile(user.id);
+        const profileRes = await profileAPI.getMyCandidateProfile();
         setProfile(profileRes.data);
       } catch (error: any) {
-        if (error.response?.status === 404) {
-          // 프로필 없음 - 정상
-        }
+        console.error('프로필 로드 실패:', error);
       }
       
       // TODO: 최근 인터뷰 목록 API 구현 필요
@@ -81,14 +79,29 @@ export default function CandidateDashboardPage() {
     let completed = 0;
     const total = 8;
     
-    if (profile.photoUrl) completed++;
-    if (profile.bio) completed++;
-    if (profile.educationJson) completed++;
-    if (profile.experienceJson) completed++;
-    if (profile.skillsJson) completed++;
-    if (profile.desiredPosition) completed++;
-    if (profile.portfolioUrl || profile.githubUrl) completed++;
-    if (profile.resumeUrl) completed++;
+    // 각 필드가 실제로 채워져 있는지 확인 (빈 문자열, null, undefined 체크)
+    const hasValue = (value: any): boolean => {
+      if (!value) return false;
+      if (typeof value === 'string') return value.trim().length > 0;
+      if (typeof value === 'object') {
+        try {
+          const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+          return Array.isArray(parsed) ? parsed.length > 0 : Object.keys(parsed).length > 0;
+        } catch {
+          return false;
+        }
+      }
+      return true;
+    };
+    
+    if (hasValue(profile.photoUrl)) completed++;
+    if (hasValue(profile.bio)) completed++;
+    if (hasValue(profile.educationJson)) completed++;
+    if (hasValue(profile.experienceJson)) completed++;
+    if (hasValue(profile.skillsJson)) completed++;
+    if (hasValue(profile.desiredPosition)) completed++;
+    if (hasValue(profile.portfolioUrl) || hasValue(profile.githubUrl)) completed++;
+    if (hasValue(profile.resumeUrl)) completed++;
     
     return Math.round((completed / total) * 100);
   };

@@ -50,7 +50,7 @@ apiClient.interceptors.response.use(
       
       // 로그인 페이지로 리다이렉트
       if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        window.location.href = '/auth/login';
       }
     }
     
@@ -211,6 +211,9 @@ export const authAPI = {
 // 프로필 API
 export const profileAPI = {
   // 구직자 프로필
+  getMyCandidateProfile: () => 
+    apiClient.get<CandidateProfile>('/api/v1/profile/candidate/me'),
+  
   getCandidateProfile: (id: string) => 
     apiClient.get<CandidateProfile>(`/api/v1/profile/candidate/${id}`),
   
@@ -218,6 +221,9 @@ export const profileAPI = {
     apiClient.put<CandidateProfile>(`/api/v1/profile/candidate/${id}`, data),
   
   // 채용담당자 프로필
+  getMyRecruiterProfile: () => 
+    apiClient.get<RecruiterProfile>('/api/v1/profile/recruiter/me'),
+  
   getRecruiterProfile: (id: string) => 
     apiClient.get<RecruiterProfile>(`/api/v1/profile/recruiter/${id}`),
   

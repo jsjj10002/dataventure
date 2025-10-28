@@ -151,6 +151,145 @@ def calculate_cosine_similarity(embedding1: List[float], embedding2: List[float]
     return float(similarity)
 
 
+# 직무별 역량 가중치 매핑
+# 각 직무에 대해 5가지 역량의 중요도를 가중치로 정의
+POSITION_WEIGHTS = {
+    "경영관리": {
+        "informationAnalysis": 0.40,
+        "problemSolving": 0.35,
+        "flexibleThinking": 0.25,
+        "negotiation": 0.0,
+        "itSkills": 0.0
+    },
+    "전략기획": {
+        "informationAnalysis": 0.40,
+        "problemSolving": 0.35,
+        "flexibleThinking": 0.25,
+        "negotiation": 0.0,
+        "itSkills": 0.0
+    },
+    "회계": {
+        "informationAnalysis": 0.40,
+        "problemSolving": 0.35,
+        "flexibleThinking": 0.25,
+        "negotiation": 0.0,
+        "itSkills": 0.0
+    },
+    "경리": {
+        "informationAnalysis": 0.40,
+        "problemSolving": 0.35,
+        "flexibleThinking": 0.25,
+        "negotiation": 0.0,
+        "itSkills": 0.0
+    },
+    "인사": {
+        "informationAnalysis": 0.40,
+        "problemSolving": 0.35,
+        "flexibleThinking": 0.25,
+        "negotiation": 0.0,
+        "itSkills": 0.0
+    },
+    "총무": {
+        "informationAnalysis": 0.40,
+        "problemSolving": 0.35,
+        "flexibleThinking": 0.25,
+        "negotiation": 0.0,
+        "itSkills": 0.0
+    },
+    "영업": {
+        "negotiation": 0.40,
+        "flexibleThinking": 0.35,
+        "informationAnalysis": 0.25,
+        "problemSolving": 0.0,
+        "itSkills": 0.0
+    },
+    "마케팅": {
+        "negotiation": 0.40,
+        "flexibleThinking": 0.35,
+        "informationAnalysis": 0.25,
+        "problemSolving": 0.0,
+        "itSkills": 0.0
+    },
+    "전산": {
+        "itSkills": 0.40,
+        "problemSolving": 0.35,
+        "informationAnalysis": 0.25,
+        "negotiation": 0.0,
+        "flexibleThinking": 0.0
+    },
+    "IT": {
+        "itSkills": 0.40,
+        "problemSolving": 0.35,
+        "informationAnalysis": 0.25,
+        "negotiation": 0.0,
+        "flexibleThinking": 0.0
+    },
+    "IT 개발": {
+        "itSkills": 0.40,
+        "problemSolving": 0.35,
+        "informationAnalysis": 0.25,
+        "negotiation": 0.0,
+        "flexibleThinking": 0.0
+    },
+    "개발": {
+        "itSkills": 0.40,
+        "problemSolving": 0.35,
+        "informationAnalysis": 0.25,
+        "negotiation": 0.0,
+        "flexibleThinking": 0.0
+    },
+    "개발 기획": {
+        "itSkills": 0.40,
+        "problemSolving": 0.35,
+        "informationAnalysis": 0.25,
+        "negotiation": 0.0,
+        "flexibleThinking": 0.0
+    },
+}
+
+
+def calculate_competency_score(
+    candidate_evaluation: dict,
+    job_position: str
+) -> float:
+    """
+    5가지 역량 점수를 직무별 가중치로 계산
+    
+    Args:
+        candidate_evaluation: 구직자 평가 결과 (5가지 역량 점수 포함)
+        job_position: 채용 공고 직무
+    
+    Returns:
+        가중 역량 점수 (0-100)
+    """
+    # 직무별 가중치 가져오기 (없으면 균등 가중치)
+    weights = POSITION_WEIGHTS.get(job_position, {
+        "informationAnalysis": 0.20,
+        "problemSolving": 0.20,
+        "flexibleThinking": 0.20,
+        "negotiation": 0.20,
+        "itSkills": 0.20
+    })
+    
+    # 5가지 역량 점수 추출 (없으면 0)
+    info_analysis = candidate_evaluation.get("informationAnalysis", 0)
+    problem_solving = candidate_evaluation.get("problemSolving", 0)
+    flexible_thinking = candidate_evaluation.get("flexibleThinking", 0)
+    negotiation = candidate_evaluation.get("negotiation", 0)
+    it_skills = candidate_evaluation.get("itSkills", 0)
+    
+    # 가중 합계 계산
+    weighted_score = (
+        info_analysis * weights["informationAnalysis"] +
+        problem_solving * weights["problemSolving"] +
+        flexible_thinking * weights["flexibleThinking"] +
+        negotiation * weights["negotiation"] +
+        it_skills * weights["itSkills"]
+    )
+    
+    return round(weighted_score, 2)
+
+
 def calculate_matching_score(
     candidate_embedding: List[float],
     job_posting_embedding: List[float],
@@ -158,13 +297,13 @@ def calculate_matching_score(
     job_posting: dict = None
 ) -> float:
     """
-    매칭 점수 계산 (벡터 유사도 + 규칙 기반)
+    매칭 점수 계산 (벡터 유사도 + 5가지 역량 가중치 + 규칙 기반)
     
     Args:
         candidate_embedding: 구직자 임베딩
         job_posting_embedding: 공고 임베딩
-        candidate_profile: 구직자 프로필 (선택)
-        job_posting: 공고 정보 (선택)
+        candidate_profile: 구직자 프로필 (선택, evaluation 포함 가능)
+        job_posting: 공고 정보 (선택, position 포함)
     
     Returns:
         매칭 점수 (0-100)
@@ -176,7 +315,20 @@ def calculate_matching_score(
     # -1~1 범위를 0~100으로 변환: (sim + 1) / 2 * 100
     base_score = ((cosine_sim + 1) / 2) * 100
     
-    # 3. 규칙 기반 보정 (선택)
+    # 3. 5가지 역량 가중치 점수 계산 (있는 경우만)
+    competency_score = 0
+    competency_weight = 0
+    
+    if candidate_profile and job_posting:
+        candidate_evaluation = candidate_profile.get("evaluation")
+        job_position = job_posting.get("position")
+        
+        if candidate_evaluation and job_position:
+            # 5가지 역량 점수가 있으면 가중치 적용
+            competency_score = calculate_competency_score(candidate_evaluation, job_position)
+            competency_weight = 0.4  # 역량 점수 가중치 40%
+    
+    # 4. 규칙 기반 보정
     bonus = 0
     
     if candidate_profile and job_posting:
@@ -203,8 +355,17 @@ def calculate_matching_score(
             match_ratio = len(candidate_skills & preferred_skills) / len(preferred_skills) if preferred_skills else 0
             bonus += match_ratio * 5  # 최대 +5점
     
-    # 4. 최종 점수 (0-100 범위로 클램핑)
-    final_score = min(100, base_score + bonus)
+    # 5. 최종 점수 계산
+    if competency_weight > 0:
+        # 역량 점수가 있으면 벡터 유사도와 역량 점수를 조합
+        # 벡터 유사도 60% + 역량 점수 40%
+        final_score = (base_score * (1 - competency_weight)) + (competency_score * competency_weight) + bonus
+    else:
+        # 역량 점수가 없으면 기존 방식대로
+        final_score = base_score + bonus
+    
+    # 6. 0-100 범위로 클램핑
+    final_score = min(100, max(0, final_score))
     
     return round(final_score, 2)
 

@@ -1,0 +1,30 @@
+# Python AI Engine Development Dockerfile (uv 사용, 초고속)
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Python 환경 설정
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# uv 바이너리를 공식 distroless 이미지에서 복사 (Astral 공식 권장 방법)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
+# 시스템 의존성 설치
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# requirements.txt 복사 및 설치 (uv 사용)
+COPY requirements.txt .
+RUN uv pip install --system --no-cache -r requirements.txt
+
+# 애플리케이션 코드는 볼륨 마운트로 처리
+
+EXPOSE 8000
+
+# Uvicorn 서버 실행 (개발 모드 with reload)
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+

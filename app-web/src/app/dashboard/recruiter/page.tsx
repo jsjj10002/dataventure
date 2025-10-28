@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Users, Briefcase, TrendingUp, Eye, Search, Filter, Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import apiClient from '@/lib/api-client';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,56 +26,37 @@ import {
 } from 'recharts';
 import { ProfileCardSkeleton } from '@/components/ui/loading-skeleton';
 
-// 임시 데이터
-const statsData = [
-  { label: '활성 공고', value: 5, icon: Briefcase, color: 'text-blue-600', bgColor: 'bg-blue-100' },
-  { label: '전체 지원자', value: 48, icon: Users, color: 'text-green-600', bgColor: 'bg-green-100' },
-  { label: '평균 매칭 점수', value: 78, icon: TrendingUp, color: 'text-purple-600', bgColor: 'bg-purple-100' },
-  { label: '프로필 조회', value: 152, icon: Eye, color: 'text-orange-600', bgColor: 'bg-orange-100' }
-];
-
-const applicants = [
-  {
-    id: '1',
-    name: '김철수',
-    position: 'IT개발',
-    matchScore: 85,
-    overallScore: 82,
-    avatar: null,
-    appliedDate: '2025-10-25',
-    status: 'NEW'
-  },
-  {
-    id: '2',
-    name: '이영희',
-    position: '경영관리',
-    matchScore: 78,
-    overallScore: 76,
-    avatar: null,
-    appliedDate: '2025-10-24',
-    status: 'REVIEWED'
-  },
-  {
-    id: '3',
-    name: '박민수',
-    position: 'IT개발',
-    matchScore: 92,
-    overallScore: 88,
-    avatar: null,
-    appliedDate: '2025-10-23',
-    status: 'SHORTLISTED'
-  }
-];
-
-const skillDistribution = [
-  { name: 'IT능력', value: 35 },
-  { name: '문제해결', value: 25 },
-  { name: '정보분석', value: 20 },
-  { name: '협상설득', value: 12 },
-  { name: '유연한사고', value: 8 }
-];
-
 const COLORS = ['#0891b2', '#9333ea', '#059669', '#ea580c', '#eab308'];
+
+interface Stats {
+  activeJobCount: number;
+  totalApplicants: number;
+  avgMatchingScore: number;
+  profileViews: number;
+}
+
+interface Applicant {
+  id: string;
+  candidateId: string;
+  name: string;
+  email: string;
+  position: string;
+  experience: number;
+  matchScore: number;
+  overallScore: number;
+  appliedDate: string;
+  status: string;
+  jobPosting: {
+    id: string;
+    title: string;
+    position: string;
+  };
+}
+
+interface SkillData {
+  name: string;
+  value: number;
+}
 
 export default function RecruiterDashboardPage() {
   const router = useRouter();
@@ -82,8 +64,11 @@ export default function RecruiterDashboardPage() {
   
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [applicants, setApplicants] = useState<Applicant[]>([]);
+  const [skillDistribution, setSkillDistribution] = useState<SkillData[]>([]);
 
-  // 인증 확인
+  // 인증 확인 및 데이터 로드
   useEffect(() => {
     if (!isAuthenticated) {
       router.push('/auth/login');
@@ -96,8 +81,41 @@ export default function RecruiterDashboardPage() {
       return;
     }
     
-    setIsLoading(false);
+    fetchDashboardData();
   }, [isAuthenticated, user, router]);
+
+  const fetchDashboardData = async () => {
+    try {
+      setIsLoading(true);
+
+      // 병렬로 데이터 조회
+      const [statsRes, applicantsRes, skillsRes] = await Promise.all([
+        apiClient.get('/api/v1/dashboard/recruiter/stats'),
+        apiClient.get('/api/v1/dashboard/recruiter/applicants', { params: { limit: 20 } }),
+        apiClient.get('/api/v1/dashboard/recruiter/skill-distribution'),
+      ]);
+
+      setStats(statsRes.data);
+      setApplicants(applicantsRes.data.applicants);
+      setSkillDistribution(skillsRes.data.distribution);
+    } catch (err: any) {
+      console.error('대시보드 데이터 로드 실패:', err);
+      const errorMessage = err.response?.data?.message || err.message || '대시보드 데이터를 불러올 수 없습니다.';
+      toast.error(errorMessage);
+      
+      // 오류가 발생해도 빈 데이터로 초기화
+      setStats({
+        activeJobCount: 0,
+        totalApplicants: 0,
+        avgMatchingScore: 0,
+        profileViews: 0,
+      });
+      setApplicants([]);
+      setSkillDistribution([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const filteredApplicants = applicants.filter(app =>
     app.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -106,16 +124,88 @@ export default function RecruiterDashboardPage() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'NEW':
-        return <Badge variant="default">신규</Badge>;
-      case 'REVIEWED':
-        return <Badge variant="secondary">검토중</Badge>;
-      case 'SHORTLISTED':
-        return <Badge variant="success">후보 선정</Badge>;
+      case 'PENDING':
+        return <Badge variant="default">검토 중</Badge>;
+      case 'ACCEPTED':
+        return <Badge variant="success">합격</Badge>;
+      case 'REJECTED':
+        return <Badge variant="destructive">불합격</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
   };
+
+  const handleDownloadReport = () => {
+    if (!stats || !applicants) {
+      toast.error('다운로드할 데이터가 없습니다.');
+      return;
+    }
+
+    try {
+      // CSV 형식으로 리포트 생성
+      const reportData = [
+        ['=== 채용 대시보드 통계 리포트 ==='],
+        ['생성 일시:', new Date().toLocaleString('ko-KR')],
+        [''],
+        ['[통계 요약]'],
+        ['활성 채용 공고:', stats.activeJobCount],
+        ['전체 지원자:', stats.totalApplicants],
+        ['평균 매칭 점수:', stats.avgMatchingScore.toFixed(1)],
+        ['프로필 조회수:', stats.profileViews],
+        [''],
+        ['[지원자 목록]'],
+        ['이름', '이메일', '지원 직무', '경력(년)', '매칭 점수', '종합 점수', '상태', '지원일'],
+        ...applicants.map(app => [
+          app.name,
+          app.email,
+          app.position,
+          app.experience,
+          app.matchScore,
+          app.overallScore,
+          app.status,
+          app.appliedDate,
+        ]),
+        [''],
+        ['[역량 분포]'],
+        ['역량', '인원'],
+        ...skillDistribution.map(skill => [skill.name, skill.value]),
+      ];
+
+      // CSV 문자열 생성
+      const csvContent = reportData
+        .map(row => row.join(','))
+        .join('\n');
+
+      // BOM 추가 (한글 깨짐 방지)
+      const BOM = '\uFEFF';
+      const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+      
+      // 다운로드
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `채용_리포트_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success('리포트가 다운로드되었습니다!');
+    } catch (error) {
+      console.error('리포트 다운로드 실패:', error);
+      toast.error('리포트 다운로드에 실패했습니다.');
+    }
+  };
+
+  const statsData = stats
+    ? [
+        { label: '활성 공고', value: stats.activeJobCount, icon: Briefcase, color: 'text-blue-600', bgColor: 'bg-blue-100' },
+        { label: '전체 지원자', value: stats.totalApplicants, icon: Users, color: 'text-green-600', bgColor: 'bg-green-100' },
+        { label: '평균 매칭 점수', value: stats.avgMatchingScore, icon: TrendingUp, color: 'text-purple-600', bgColor: 'bg-purple-100' },
+        { label: '프로필 조회', value: stats.profileViews, icon: Eye, color: 'text-orange-600', bgColor: 'bg-orange-100' }
+      ]
+    : [];
 
   if (isLoading) {
     return (
@@ -294,15 +384,27 @@ export default function RecruiterDashboardPage() {
                 <CardTitle>빠른 작업</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                <Button variant="outline" className="w-full justify-start">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start"
+                  onClick={() => router.push('/job-posting/create')}
+                >
                   <Briefcase className="mr-2 h-4 w-4" />
                   새 채용 공고 작성
                 </Button>
-                <Button variant="outline" className="w-full justify-start">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start"
+                  onClick={() => router.push('/recommendations')}
+                >
                   <Users className="mr-2 h-4 w-4" />
                   추천 후보 보기
                 </Button>
-                <Button variant="outline" className="w-full justify-start">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start"
+                  onClick={handleDownloadReport}
+                >
                   <TrendingUp className="mr-2 h-4 w-4" />
                   통계 리포트 다운로드
                 </Button>

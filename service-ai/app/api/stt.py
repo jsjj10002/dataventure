@@ -45,8 +45,7 @@ async def transcribe_audio(
         os.unlink(temp_audio_path)
         
         return {
-            "text": transcription.text,
-            "success": True
+            "text": transcription.text
         }
         
     except Exception as e:
@@ -109,8 +108,7 @@ async def transcribe_audio_realtime(
         
         return {
             "text": text,
-            "language": language,
-            "success": True
+            "language": language
         }
         
     except Exception as e:

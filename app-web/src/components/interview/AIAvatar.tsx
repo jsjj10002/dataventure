@@ -7,6 +7,7 @@ interface AIAvatarProps {
   isSpeaking?: boolean;
   emotion?: 'neutral' | 'happy' | 'thinking' | 'surprised';
   className?: string;
+  mousePosition?: { x: number; y: number };
 }
 
 /**
@@ -18,9 +19,11 @@ interface AIAvatarProps {
 export default function AIAvatar({ 
   isSpeaking = false, 
   emotion = 'neutral',
-  className = ''
+  className = '',
+  mousePosition = { x: 0, y: 0 }
 }: AIAvatarProps) {
   const [mouthOpen, setMouthOpen] = useState(false);
+  const [eyeOffset, setEyeOffset] = useState({ x: 0, y: 0 });
 
   // 말하는 동안 입 애니메이션
   useEffect(() => {
@@ -36,6 +39,30 @@ export default function AIAvatar({
 
     return () => clearInterval(interval);
   }, [isSpeaking]);
+
+  // 마우스 커서 추적 - 눈동자 움직임
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const avatarElement = document.getElementById('ai-avatar-center');
+    if (!avatarElement) return;
+    
+    const rect = avatarElement.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    
+    // 마우스와 아바타 중심 간의 거리 계산
+    const deltaX = mousePosition.x - centerX;
+    const deltaY = mousePosition.y - centerY;
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    
+    // 최대 이동 거리 제한 (눈동자가 너무 많이 움직이지 않도록)
+    const maxDistance = 2; // SVG 좌표계 기준
+    const normalizedX = (deltaX / distance) * Math.min(distance / 100, maxDistance);
+    const normalizedY = (deltaY / distance) * Math.min(distance / 100, maxDistance);
+    
+    setEyeOffset({ x: normalizedX || 0, y: normalizedY || 0 });
+  }, [mousePosition]);
 
   // 감정별 색상
   const emotionColors = {
@@ -88,10 +115,26 @@ export default function AIAvatar({
       default: // neutral
         return (
           <>
+            {/* 왼쪽 눈 흰자 */}
             <circle cx="35" cy="45" r="4" fill="white" />
+            {/* 오른쪽 눈 흰자 */}
             <circle cx="65" cy="45" r="4" fill="white" />
-            <circle cx="36" cy="44" r="2" fill="#1e293b" />
-            <circle cx="66" cy="44" r="2" fill="#1e293b" />
+            {/* 왼쪽 눈동자 (마우스 추적) */}
+            <circle 
+              cx={36 + eyeOffset.x} 
+              cy={44 + eyeOffset.y} 
+              r="2" 
+              fill="#1e293b"
+              className="transition-all duration-100 ease-out"
+            />
+            {/* 오른쪽 눈동자 (마우스 추적) */}
+            <circle 
+              cx={66 + eyeOffset.x} 
+              cy={44 + eyeOffset.y} 
+              r="2" 
+              fill="#1e293b"
+              className="transition-all duration-100 ease-out"
+            />
           </>
         );
     }
@@ -161,7 +204,7 @@ export default function AIAvatar({
   };
 
   return (
-    <div className={`relative ${className}`}>
+    <div id="ai-avatar-center" className={`relative ${className}`}>
       {/* 아바타 컨테이너 */}
       <div className="relative">
         {/* 배경 원 (펄스 효과) */}
