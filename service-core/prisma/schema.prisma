@@ -34,6 +34,7 @@ model User {
   candidateProfile CandidateProfile?
   recruiterProfile RecruiterProfile?
   interviews       Interview[]
+  notifications    Notification[]
 
   @@map("users")
 }
@@ -44,18 +45,42 @@ model CandidateProfile {
   userId          String   @unique
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
+  // 프로필 이미지
+  profileImageUrl String?
+  
   // 이력서 정보
   resumeText      String?  @db.Text
-  resumeUrl       String?  // Cloud Storage URL
+  resumeUrl       String?  // Cloud Storage URL (PDF, DOCX)
+  portfolioUrl    String?  // 포트폴리오 파일 URL
   // pgvector 임베딩 (Unsupported type으로 표시되지만 런타임에 작동)
   resumeEmbedding String?  @db.Text  // JSON 문자열로 저장 후 파싱
   
   // 기본 정보
   skills          String[] // 예: ["Python", "FastAPI", "React"]
-  experience      Int?     // 경력 (년)
-  education       String?  // 학력
+  experience      Int?     // 총 경력 (년)
+  education       String?  // 최종 학력
   desiredPosition String?  // 희망 직무
   desiredSalary   Int?     // 희망 연봉 (만원)
+  
+  // 상세 정보
+  bio             String?  @db.Text  // 자기소개
+  
+  // 경력 사항 (JSON 배열로 저장)
+  // [{ company: "", position: "", startDate: "", endDate: "", description: "" }]
+  careerHistory   String?  @db.Text
+  
+  // 프로젝트 경험 (JSON 배열로 저장)
+  // [{ title: "", description: "", skills: [], startDate: "", endDate: "", url: "" }]
+  projects        String?  @db.Text
+  
+  // 외부 링크
+  githubUrl       String?
+  blogUrl         String?
+  linkedinUrl     String?
+  portfolioWebUrl String?  // 포트폴리오 웹사이트
+  
+  // 고유 페이지 URL (공유용)
+  uniqueUrl       String?  @unique  // 예: /profile/abc123
   
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -65,19 +90,28 @@ model CandidateProfile {
 
 // 채용담당자 프로필
 model RecruiterProfile {
-  id          String   @id @default(uuid())
-  userId      String   @unique
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  companyName String
-  companyUrl  String?
-  position    String   // 채용담당자 직책
+  // 회사 정보
+  companyName  String
+  companyUrl   String?   // 회사 웹사이트
+  companyLogo  String?   // 로고 이미지 URL
+  position     String    // 채용담당자 직책
   
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  // 회사 소개
+  companyDescription String?  @db.Text  // 회사 소개
+  companyVision      String?  @db.Text  // 인재상 / 비전
+  
+  // 고유 페이지 URL (공유용)
+  uniqueUrl    String?  @unique  // 예: /company/abc123
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
   
   // Relations
-  jobPostings JobPosting[]
+  jobPostings  JobPosting[]
 
   @@map("recruiter_profiles")
 }
@@ -124,6 +158,11 @@ enum InterviewStatus {
   ABANDONED    // 중단
 }
 
+enum InterviewMode {
+  PRACTICE     // 연습 모드
+  ACTUAL       // 실전 모드
+}
+
 model Interview {
   id              String   @id @default(uuid())
   candidateId     String
@@ -132,9 +171,16 @@ model Interview {
   jobPostingId    String?
   jobPosting      JobPosting? @relation(fields: [jobPostingId], references: [id], onDelete: SetNull)
   
+  // 인터뷰 설정
+  mode            InterviewMode @default(PRACTICE)  // 연습/실전 모드
+  timeLimitSeconds Int?        // 시간 제한 (초) - 연습: 300,600,900,1200 / 실전: 900
+  isVoiceMode     Boolean @default(false)  // 음성 모드 여부
+  
+  // 상태 및 시간
   status          InterviewStatus @default(IN_PROGRESS)
   startedAt       DateTime @default(now())
   completedAt     DateTime?
+  elapsedSeconds  Int? // 실제 소요 시간 (초)
   
   // Relations
   messages        InterviewMessage[]
@@ -179,16 +225,30 @@ model Evaluation {
   interviewId   String   @unique
   interview     Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
   
-  // 평가 점수 (0-100)
-  technicalScore      Float  // 기술 역량
-  communicationScore  Float  // 커뮤니케이션
-  problemSolvingScore Float  // 문제 해결 능력
-  overallScore        Float  // 종합 점수
+  // 의사소통능력 (공통 평가 항목) - 0-100
+  deliveryScore          Float  // 전달력
+  vocabularyScore        Float  // 어휘 사용 적절성
+  comprehensionScore     Float  // 문제 이해력
+  communicationAvg       Float  // 의사소통능력 평균
+  
+  // 직무 특별 평가 항목 (5가지) - 0-100
+  informationAnalysis    Float  // 정보분석능력
+  problemSolving         Float  // 문제해결능력
+  flexibleThinking       Float  // 유연한사고능력
+  negotiation            Float  // 협상및설득능력
+  itSkills               Float  // IT능력
+  
+  // 종합 점수
+  overallScore           Float  // 종합 점수 (0-100)
   
   // 통계 분석 기반 피드백 (JSON 형태)
   strengthsJson       String   @db.Text  // 강점 목록
   weaknessesJson      String   @db.Text  // 약점 목록
   detailedFeedback    String   @db.Text  // 상세 피드백
+  
+  // 추천 직무 랭킹 (JSON 배열)
+  // [{ position: "경영관리", score: 85, reason: "..." }, ...]
+  recommendedPositions String @db.Text
   
   // 매칭 정보 (특정 공고와의 매칭)
   matchingScore       Float?   // 0-100
@@ -198,5 +258,34 @@ model Evaluation {
   updatedAt           DateTime @updatedAt
 
   @@map("evaluations")
+}
+
+// ===== 알림 시스템 =====
+
+enum NotificationType {
+  EVALUATION_COMPLETED  // 평가 완료
+  NEW_RECOMMENDATION    // 새로운 추천
+  APPLICATION_UPDATE    // 지원 상태 업데이트
+  NEW_MESSAGE           // 새 메시지
+  SYSTEM                // 시스템 알림
+}
+
+model Notification {
+  id            String           @id @default(uuid())
+  userId        String
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type          NotificationType
+  title         String
+  message       String           @db.Text
+  link          String?          // 알림 클릭 시 이동할 URL
+  
+  isRead        Boolean          @default(false)
+  
+  createdAt     DateTime         @default(now())
+
+  @@map("notifications")
+  @@index([userId, isRead])
+  @@index([createdAt])
 }
 

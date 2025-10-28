@@ -24,6 +24,15 @@ import jobPostingRoutes from './routes/jobPosting.routes';
 import recommendationRoutes from './routes/recommendation.routes';
 import healthRoutes from './routes/health.routes';
 
+// Sprint 8-9 신규 라우터
+import candidateProfileRoutes from './routes/profile/candidate';
+import recruiterProfileRoutes from './routes/profile/recruiter';
+import newInterviewRoutes from './routes/interview';
+import newEvaluationRoutes from './routes/evaluation';
+import notificationRoutes from './routes/notification';
+import searchRoutes from './routes/search';
+import uploadRoutes from './routes/upload';
+
 // 환경 변수 로딩
 dotenv.config();
 
@@ -82,12 +91,22 @@ app.get('/', (req: Request, res: Response) => {
 app.use('/', healthRoutes);
 
 // ===== API 라우터 =====
+// 기존 라우터
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/interviews', interviewRoutes);
 app.use('/api/v1/evaluations', evaluationRoutes);
 app.use('/api/v1/jobs', jobPostingRoutes);
 app.use('/api/v1/recommendations', recommendationRoutes);
+
+// Sprint 8-9 신규 라우터
+app.use('/api/v1/profile/candidate', candidateProfileRoutes);
+app.use('/api/v1/profile/recruiter', recruiterProfileRoutes);
+app.use('/api/v1/interview', newInterviewRoutes);
+app.use('/api/v1/evaluation', newEvaluationRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/search', searchRoutes);
+app.use('/api/v1/upload', uploadRoutes);
 
 // Socket.IO 핸들러
 import { registerInterviewHandlers } from './socket/interview.handler';

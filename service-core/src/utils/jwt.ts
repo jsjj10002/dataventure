@@ -9,6 +9,7 @@ import jwt from 'jsonwebtoken';
  */
 export interface JwtPayload {
   userId: string;
+  id: string; // userId의 별칭
   email: string;
   role: string;
 }

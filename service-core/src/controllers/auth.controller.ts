@@ -102,6 +102,7 @@ export const register = async (
     // JWT 토큰 생성
     const token = generateToken({
       userId: user.id,
+      id: user.id,
       email: user.email,
       role: user.role,
     });
@@ -166,6 +167,7 @@ export const login = async (
     // JWT 토큰 생성
     const token = generateToken({
       userId: user.id,
+      id: user.id,
       email: user.email,
       role: user.role,
     });

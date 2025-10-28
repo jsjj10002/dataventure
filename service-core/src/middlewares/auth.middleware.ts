@@ -90,3 +90,9 @@ export const authorize = (...allowedRoles: string[]) => {
   };
 };
 
+/**
+ * authenticateToken - authenticate의 별칭
+ * Sprint 8-9에서 일관성을 위해 추가
+ */
+export const authenticateToken = authenticate;
+
