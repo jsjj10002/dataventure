@@ -1,24 +1,43 @@
 import { Router } from 'express';
-import { Storage } from '@google-cloud/storage';
 import multer from 'multer';
 import { authenticateToken } from '../../middlewares/auth.middleware';
 import path from 'path';
+import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
 
-// GCP Storage 설정
-const storage = new Storage({
-  projectId: process.env.GCP_PROJECT_ID,
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+// 업로드 디렉토리 설정
+const UPLOAD_DIR = path.join(__dirname, '../../../uploads');
+
+// 업로드 디렉토리 생성 (없으면)
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+// Multer 설정 (로컬 디스크 스토리지)
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const { type = 'general' } = req.body;
+    const userId = (req as any).user?.id || 'anonymous';
+    const uploadPath = path.join(UPLOAD_DIR, type, userId);
+    
+    // 사용자별 디렉토리 생성
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath, { recursive: true });
+    }
+    
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const filename = `${uuidv4()}${ext}`;
+    cb(null, filename);
+  },
 });
 
-const bucketName = process.env.GCP_STORAGE_BUCKET || 'recruiter-files';
-const bucket = storage.bucket(bucketName);
-
-// Multer 설정 (메모리 스토리지)
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: storage,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB 제한
   },
@@ -56,49 +75,19 @@ router.post('/', authenticateToken, upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: '파일이 업로드되지 않았습니다.' });
     }
 
-    const { type = 'general' } = req.body; // photo, resume, portfolio, general
-    const userId = req.user.id;
     const file = req.file;
+    const { type = 'general' } = req.body;
+    
+    // 로컬 파일 URL 생성
+    const relativePath = path.relative(UPLOAD_DIR, file.path);
+    const fileUrl = `/uploads/${relativePath.replace(/\\/g, '/')}`;
 
-    // 파일명 생성 (UUID + 원본 확장자)
-    const ext = path.extname(file.originalname);
-    const filename = `${type}/${userId}/${uuidv4()}${ext}`;
-
-    // GCP Storage에 업로드
-    const blob = bucket.file(filename);
-    const blobStream = blob.createWriteStream({
-      resumable: false,
-      metadata: {
-        contentType: file.mimetype,
-        metadata: {
-          originalName: file.originalname,
-          uploadedBy: userId,
-          uploadedAt: new Date().toISOString(),
-        },
-      },
-    });
-
-    return new Promise((resolve, reject) => {
-      blobStream.on('error', (error) => {
-        console.error('파일 업로드 오류:', error);
-        reject(error);
-      });
-
-      blobStream.on('finish', async () => {
-        // 공개 URL 생성
-        const publicUrl = `https://storage.googleapis.com/${bucketName}/${filename}`;
-
-        res.json({
-          message: '파일이 업로드되었습니다.',
-          url: publicUrl,
-          filename: file.originalname,
-          size: file.size,
-          type: file.mimetype,
-        });
-        resolve(true);
-      });
-
-      blobStream.end(file.buffer);
+    res.json({
+      message: '파일이 업로드되었습니다.',
+      url: fileUrl,
+      filename: file.originalname,
+      size: file.size,
+      type: file.mimetype,
     });
   } catch (error) {
     console.error('파일 업로드 오류:', error);
@@ -123,36 +112,17 @@ router.post('/multiple', authenticateToken, upload.array('files', 5), async (req
       return res.status(400).json({ error: '파일이 업로드되지 않았습니다.' });
     }
 
-    const { type = 'general' } = req.body;
-    const userId = req.user.id;
-    const uploadedFiles: any[] = [];
-
-    // 모든 파일 업로드
-    for (const file of req.files) {
-      const ext = path.extname(file.originalname);
-      const filename = `${type}/${userId}/${uuidv4()}${ext}`;
-
-      const blob = bucket.file(filename);
-      await blob.save(file.buffer, {
-        resumable: false,
-        metadata: {
-          contentType: file.mimetype,
-          metadata: {
-            originalName: file.originalname,
-            uploadedBy: userId,
-            uploadedAt: new Date().toISOString(),
-          },
-        },
-      });
-
-      const publicUrl = `https://storage.googleapis.com/${bucketName}/${filename}`;
-      uploadedFiles.push({
-        url: publicUrl,
+    const uploadedFiles = req.files.map((file) => {
+      const relativePath = path.relative(UPLOAD_DIR, file.path);
+      const fileUrl = `/uploads/${relativePath.replace(/\\/g, '/')}`;
+      
+      return {
+        url: fileUrl,
         filename: file.originalname,
         size: file.size,
         type: file.mimetype,
-      });
-    }
+      };
+    });
 
     res.json({
       message: `${uploadedFiles.length}개의 파일이 업로드되었습니다.`,
@@ -183,18 +153,22 @@ router.delete('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'URL이 제공되지 않았습니다.' });
     }
 
-    // URL에서 파일명 추출
-    const filename = url.replace(`https://storage.googleapis.com/${bucketName}/`, '');
+    // URL에서 파일 경로 추출 (/uploads/...)
+    const filePath = url.replace('/uploads/', '');
+    const fullPath = path.join(UPLOAD_DIR, filePath);
     
     // 본인이 업로드한 파일인지 확인
-    if (!filename.includes(req.user.id)) {
+    if (!filePath.includes(req.user.id)) {
       return res.status(403).json({ error: '권한이 없습니다.' });
     }
 
-    // 파일 삭제
-    await bucket.file(filename).delete();
-
-    res.json({ message: '파일이 삭제되었습니다.' });
+    // 파일 존재 여부 확인
+    if (fs.existsSync(fullPath)) {
+      fs.unlinkSync(fullPath);
+      res.json({ message: '파일이 삭제되었습니다.' });
+    } else {
+      res.status(404).json({ error: '파일을 찾을 수 없습니다.' });
+    }
   } catch (error) {
     console.error('파일 삭제 오류:', error);
     res.status(500).json({ 

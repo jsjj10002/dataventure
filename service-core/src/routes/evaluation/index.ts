@@ -67,7 +67,7 @@ router.post('/analyze', async (req, res) => {
         type: 'EVALUATION_COMPLETED',
         title: '인터뷰 평가 완료',
         message: `${interview.mode === 'PRACTICE' ? '연습' : '실전'} 인터뷰 평가가 완료되었습니다.`,
-        relatedId: evaluation.id,
+        link: `/evaluation/${evaluation.id}`,
       },
     });
 

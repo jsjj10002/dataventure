@@ -27,7 +27,7 @@ export const recommendJobs = async (
 
     const { limit = 5 } = req.query;
 
-    // 사용자 프로필 조회
+    // 사용자 프로필 조회 (최신 평가 결과 포함)
     const candidateProfile = await prisma.candidateProfile.findUnique({
       where: { userId: req.user.userId },
     });
@@ -35,6 +35,18 @@ export const recommendJobs = async (
     if (!candidateProfile) {
       throw new AppError('프로필을 먼저 작성해주세요.', 400);
     }
+
+    // 최신 평가 결과 조회 (실전 모드만)
+    const latestEvaluation = await prisma.evaluation.findFirst({
+      where: {
+        interview: {
+          candidateId: req.user.userId,
+          mode: 'ACTUAL', // 실전 모드만
+          status: 'COMPLETED',
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
 
     // 활성 공고 조회
     const jobPostings = await prisma.jobPosting.findMany({
@@ -53,7 +65,7 @@ export const recommendJobs = async (
 
     // AI 서비스 호출 (추천)
     const response = await axios.post(
-      `${AI_SERVICE_URL}/internal/ai/recommend-jobs`,
+      `${AI_SERVICE_URL}/api/v1/ai/matching/recommend-jobs`,
       {
         candidateProfile: {
           userId: req.user.userId,
@@ -61,6 +73,16 @@ export const recommendJobs = async (
           skills: candidateProfile.skills,
           experience: candidateProfile.experience,
           desiredPosition: candidateProfile.desiredPosition,
+          // 5가지 역량 점수 포함 (있는 경우만)
+          ...(latestEvaluation && {
+            evaluation: {
+              informationAnalysis: latestEvaluation.informationAnalysis,
+              problemSolving: latestEvaluation.problemSolving,
+              flexibleThinking: latestEvaluation.flexibleThinking,
+              negotiation: latestEvaluation.negotiation,
+              itSkills: latestEvaluation.itSkills,
+            },
+          }),
         },
         jobPostings: jobPostings.map((job) => ({
           id: job.id,
@@ -126,7 +148,7 @@ export const recommendCandidates = async (
       throw new AppError('접근 권한이 없습니다.', 403);
     }
 
-    // 구직자 프로필 조회
+    // 구직자 프로필 조회 (실전 인터뷰 완료자만)
     const candidateProfiles = await prisma.candidateProfile.findMany({
       take: 100, // 최대 100명
       include: {
@@ -135,6 +157,17 @@ export const recommendCandidates = async (
             id: true,
             name: true,
             email: true,
+            interviews: {
+              where: {
+                mode: 'ACTUAL',
+                status: 'COMPLETED',
+              },
+              orderBy: { completedAt: 'desc' },
+              take: 1,
+              include: {
+                evaluation: true,
+              },
+            },
           },
         },
       },
@@ -150,7 +183,7 @@ export const recommendCandidates = async (
 
     // AI 서비스 호출 (추천)
     const response = await axios.post(
-      `${AI_SERVICE_URL}/internal/ai/recommend-candidates`,
+      `${AI_SERVICE_URL}/api/v1/ai/matching/recommend-candidates`,
       {
         jobPosting: {
           id: jobPosting.id,
@@ -162,13 +195,26 @@ export const recommendCandidates = async (
           experienceMin: jobPosting.experienceMin,
           experienceMax: jobPosting.experienceMax,
         },
-        candidateProfiles: candidateProfiles.map((profile) => ({
-          userId: profile.userId,
-          resumeText: profile.resumeText,
-          skills: profile.skills,
-          experience: profile.experience,
-          desiredPosition: profile.desiredPosition,
-        })),
+        candidateProfiles: candidateProfiles.map((profile) => {
+          const latestEvaluation = profile.user.interviews[0]?.evaluation;
+          return {
+            userId: profile.userId,
+            resumeText: profile.resumeText,
+            skills: profile.skills,
+            experience: profile.experience,
+            desiredPosition: profile.desiredPosition,
+            // 5가지 역량 점수 포함 (있는 경우만)
+            ...(latestEvaluation && {
+              evaluation: {
+                informationAnalysis: latestEvaluation.informationAnalysis,
+                problemSolving: latestEvaluation.problemSolving,
+                flexibleThinking: latestEvaluation.flexibleThinking,
+                negotiation: latestEvaluation.negotiation,
+                itSkills: latestEvaluation.itSkills,
+              },
+            }),
+          };
+        }),
         topK: Number(limit),
       },
       { timeout: 30000 }

@@ -36,12 +36,12 @@ router.post('/start', authenticateToken, async (req, res) => {
     }
 
     // AI 서비스에 질문 생성 요청
-    const aiResponse = await axios.post(`${AI_SERVICE_URL}/api/v1/interview/generate-questions`, {
+    const aiResponse = await axios.post(`${AI_SERVICE_URL}/internal/ai/generate-question`, {
       profile: {
-        education: profile.educationJson,
-        experience: profile.experienceJson,
-        projects: profile.projectsJson,
-        skills: profile.skillsJson,
+        education: profile.education, // 스키마 필드명 수정
+        experience: profile.careerHistory, // 스키마 필드명 수정
+        projects: profile.projects, // 스키마 필드명 수정
+        skills: profile.skills, // 스키마 필드명 수정 (String[] 배열)
         desiredPosition: profile.desiredPosition,
       },
       mode,
@@ -55,9 +55,9 @@ router.post('/start', authenticateToken, async (req, res) => {
     const interview = await prisma.interview.create({
       data: {
         candidateId: userId,
-        mode: mode === 'practice' ? 'PRACTICE' : 'REAL',
-        timeLimitSeconds: duration || 900,
-        isVoiceMode: mode === 'practice' ? false : true,
+        mode: mode === 'PRACTICE' || mode === 'practice' ? 'PRACTICE' : 'ACTUAL',
+        timeLimitSeconds: duration ? duration * 60 : 900, // 분을 초로 변환
+        isVoiceMode: mode === 'ACTUAL' || mode === 'actual',
         status: 'IN_PROGRESS',
       },
     });

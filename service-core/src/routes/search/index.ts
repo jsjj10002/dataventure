@@ -37,7 +37,6 @@ router.get('/', authenticateToken, async (req, res) => {
         where: {
           OR: [
             { bio: { contains: searchQuery, mode: 'insensitive' } },
-            { skillsJson: { contains: searchQuery, mode: 'insensitive' } },
             { desiredPosition: { contains: searchQuery, mode: 'insensitive' } },
             { user: { name: { contains: searchQuery, mode: 'insensitive' } } },
           ],
@@ -60,12 +59,12 @@ router.get('/', authenticateToken, async (req, res) => {
         id: c.id,
         userId: c.userId,
         name: c.user.name,
-        photoUrl: c.photoUrl,
+        photoUrl: c.profileImageUrl,
         bio: c.bio,
-        skills: c.skillsJson ? JSON.parse(c.skillsJson) : [],
+        skills: c.skills || [],
         desiredPosition: c.desiredPosition,
-        experience: c.experienceJson ? JSON.parse(c.experienceJson) : [],
-        education: c.educationJson ? JSON.parse(c.educationJson) : [],
+        experience: c.experience,
+        education: c.education,
         uniqueUrl: c.uniqueUrl,
       }));
     }
@@ -78,8 +77,6 @@ router.get('/', authenticateToken, async (req, res) => {
             { companyName: { contains: searchQuery, mode: 'insensitive' } },
             { companyDescription: { contains: searchQuery, mode: 'insensitive' } },
             { position: { contains: searchQuery, mode: 'insensitive' } },
-            { department: { contains: searchQuery, mode: 'insensitive' } },
-            { hiringPositionsJson: { contains: searchQuery, mode: 'insensitive' } },
             { user: { name: { contains: searchQuery, mode: 'insensitive' } } },
           ],
         },
@@ -102,11 +99,9 @@ router.get('/', authenticateToken, async (req, res) => {
         userId: r.userId,
         name: r.user.name,
         companyName: r.companyName,
-        companyLogoUrl: r.companyLogoUrl,
+        companyLogoUrl: r.companyLogo,
         companyDescription: r.companyDescription,
         position: r.position,
-        department: r.department,
-        hiringPositions: r.hiringPositionsJson ? JSON.parse(r.hiringPositionsJson) : [],
         uniqueUrl: r.uniqueUrl,
       }));
     }
@@ -148,26 +143,19 @@ router.get('/suggestions', authenticateToken, async (req, res) => {
       // 구직자의 스킬, 포지션 제안
       const profiles = await prisma.candidateProfile.findMany({
         where: {
-          skillsJson: { contains: searchQuery, mode: 'insensitive' },
+          desiredPosition: { contains: searchQuery, mode: 'insensitive' },
         },
-        select: { skillsJson: true },
+        select: { skills: true, desiredPosition: true },
         take: Number(limit),
       });
 
       profiles.forEach(p => {
-        if (p.skillsJson) {
-          try {
-            const skills = JSON.parse(p.skillsJson);
-            if (Array.isArray(skills)) {
-              skills.forEach((skill: string) => {
-                if (skill.toLowerCase().includes(searchQuery.toLowerCase()) && !suggestions.includes(skill)) {
-                  suggestions.push(skill);
-                }
-              });
+        if (p.skills && Array.isArray(p.skills)) {
+          p.skills.forEach((skill: string) => {
+            if (skill.toLowerCase().includes(searchQuery.toLowerCase()) && !suggestions.includes(skill)) {
+              suggestions.push(skill);
             }
-          } catch (e) {
-            // JSON 파싱 오류 무시
-          }
+          });
         }
       });
     } else {

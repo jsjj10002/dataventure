@@ -11,12 +11,12 @@ const prisma = new PrismaClient();
  */
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user!.id;
     const { limit = 20, offset = 0, unreadOnly = false } = req.query;
 
     const where: any = { userId };
     if (unreadOnly === 'true') {
-      where.read = false;
+      where.isRead = false;
     }
 
     const notifications = await prisma.notification.findMany({
@@ -28,7 +28,7 @@ router.get('/', authenticateToken, async (req, res) => {
 
     const totalCount = await prisma.notification.count({ where });
     const unreadCount = await prisma.notification.count({
-      where: { userId, read: false },
+      where: { userId, isRead: false },
     });
 
     res.json({
@@ -50,7 +50,7 @@ router.get('/', authenticateToken, async (req, res) => {
 router.put('/:id/read', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user.id;
+    const userId = req.user!.id;
 
     const notification = await prisma.notification.findUnique({
       where: { id },
@@ -67,7 +67,7 @@ router.put('/:id/read', authenticateToken, async (req, res) => {
 
     const updatedNotification = await prisma.notification.update({
       where: { id },
-      data: { read: true },
+      data: { isRead: true },
     });
 
     res.json(updatedNotification);
@@ -83,11 +83,11 @@ router.put('/:id/read', authenticateToken, async (req, res) => {
  */
 router.put('/read-all', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user!.id;
 
     const result = await prisma.notification.updateMany({
-      where: { userId, read: false },
-      data: { read: true },
+      where: { userId, isRead: false },
+      data: { isRead: true },
     });
 
     res.json({
@@ -107,7 +107,7 @@ router.put('/read-all', authenticateToken, async (req, res) => {
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user.id;
+    const userId = req.user!.id;
 
     const notification = await prisma.notification.findUnique({
       where: { id },

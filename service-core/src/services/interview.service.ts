@@ -334,17 +334,29 @@ export const generateEvaluation = async (interviewId: string): Promise<void> => 
 
     const { scores, feedback } = response.data;
 
-    // 평가 결과 저장
+    // 평가 결과 저장 (Sprint 8-9 새로운 스키마)
     await prisma.evaluation.create({
       data: {
         interviewId,
-        technicalScore: scores.technicalScore,
-        communicationScore: scores.communicationScore,
-        problemSolvingScore: scores.problemSolvingScore,
-        overallScore: scores.overallScore,
-        strengthsJson: JSON.stringify(feedback.strengths),
-        weaknessesJson: JSON.stringify(feedback.weaknesses),
-        detailedFeedback: feedback.summary,
+        // 의사소통능력 (공통 평가)
+        deliveryScore: scores.deliveryScore || scores.communicationScore || 70,
+        vocabularyScore: scores.vocabularyScore || scores.communicationScore || 70,
+        comprehensionScore: scores.comprehensionScore || scores.problemSolvingScore || 70,
+        communicationAvg: scores.communicationAvg || scores.communicationScore || 70,
+        // 직무 특별 평가
+        informationAnalysis: scores.informationAnalysis || scores.technicalScore || 70,
+        problemSolving: scores.problemSolving || scores.problemSolvingScore || 70,
+        flexibleThinking: scores.flexibleThinking || scores.problemSolvingScore || 70,
+        negotiation: scores.negotiation || scores.communicationScore || 70,
+        itSkills: scores.itSkills || scores.technicalScore || 70,
+        // 종합 점수
+        overallScore: scores.overallScore || 70,
+        // 피드백
+        strengthsJson: JSON.stringify(feedback.strengths || []),
+        weaknessesJson: JSON.stringify(feedback.weaknesses || []),
+        detailedFeedback: feedback.summary || feedback.detailedFeedback || '',
+        // 추천 직무
+        recommendedPositions: JSON.stringify(feedback.recommendedPositions || []),
       },
     });
 

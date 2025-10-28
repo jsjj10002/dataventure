@@ -34,6 +34,7 @@ model User {
   candidateProfile CandidateProfile?
   recruiterProfile RecruiterProfile?
   interviews       Interview[]
+  applications     Application[] @relation("CandidateApplications")
   notifications    Notification[]
 
   @@map("users")
@@ -146,8 +147,37 @@ model JobPosting {
   
   // Relations
   interviews      Interview[]
+  applications    Application[]
 
   @@map("job_postings")
+}
+
+// ===== 지원서 =====
+
+enum ApplicationStatus {
+  PENDING   // 검토 중
+  ACCEPTED  // 합격
+  REJECTED  // 불합격
+}
+
+model Application {
+  id              String   @id @default(uuid())
+  candidateId     String
+  candidate       User     @relation("CandidateApplications", fields: [candidateId], references: [id], onDelete: Cascade)
+  
+  jobPostingId    String
+  jobPosting      JobPosting @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
+  
+  // 지원 정보
+  coverLetter     String?  @db.Text  // 자기소개서 (선택)
+  status          ApplicationStatus @default(PENDING)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // 동일한 공고에 중복 지원 방지
+  @@unique([candidateId, jobPostingId])
+  @@map("applications")
 }
 
 // ===== 인터뷰 =====

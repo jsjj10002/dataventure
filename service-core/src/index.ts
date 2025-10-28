@@ -8,6 +8,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import path from 'path';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { PrismaClient } from '@prisma/client';
@@ -21,6 +22,8 @@ import userRoutes from './routes/user.routes';
 import interviewRoutes from './routes/interview.routes';
 import evaluationRoutes from './routes/evaluation.routes';
 import jobPostingRoutes from './routes/jobPosting.routes';
+import applicationRoutes from './routes/application.routes';
+import dashboardRoutes from './routes/dashboard.routes';
 import recommendationRoutes from './routes/recommendation.routes';
 import healthRoutes from './routes/health.routes';
 
@@ -71,6 +74,9 @@ app.use(rateLimit({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// 업로드된 파일 정적 제공
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 // 요청 로깅 (개발 환경)
 if (process.env.NODE_ENV === 'development') {
   app.use((req: Request, res: Response, next: NextFunction) => {
@@ -97,6 +103,8 @@ app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/interviews', interviewRoutes);
 app.use('/api/v1/evaluations', evaluationRoutes);
 app.use('/api/v1/jobs', jobPostingRoutes);
+app.use('/api/v1/applications', applicationRoutes);
+app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/recommendations', recommendationRoutes);
 
 // Sprint 8-9 신규 라우터

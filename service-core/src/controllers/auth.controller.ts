@@ -82,7 +82,7 @@ export const register = async (
     const saltRounds = 10;
     const passwordHash = await bcrypt.hash(password, saltRounds);
 
-    // 사용자 생성
+    // 사용자 생성 및 프로필 자동 생성
     const user = await prisma.user.create({
       data: {
         email,
@@ -98,6 +98,23 @@ export const register = async (
         createdAt: true,
       },
     });
+
+    // 역할에 따라 프로필 자동 생성
+    if (role === 'CANDIDATE') {
+      await prisma.candidateProfile.create({
+        data: {
+          userId: user.id,
+        },
+      });
+    } else if (role === 'RECRUITER') {
+      await prisma.recruiterProfile.create({
+        data: {
+          userId: user.id,
+          companyName: '', // 기본값 설정 (프로필 페이지에서 입력)
+          position: '채용담당자', // 기본값 설정 (프로필 페이지에서 수정 가능)
+        },
+      });
+    }
 
     // JWT 토큰 생성
     const token = generateToken({
