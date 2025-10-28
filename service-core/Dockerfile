@@ -1,6 +1,9 @@
 # Node.js 기반 Backend Core API Dockerfile
 FROM node:20-alpine AS base
 
+# Prisma를 위한 OpenSSL 설치
+RUN apk add --no-cache openssl1.1-compat libc6-compat
+
 # 의존성 설치 단계
 FROM base AS deps
 WORKDIR /app

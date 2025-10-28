@@ -37,10 +37,11 @@ jobs:
 
       - name: Run tests (Import validation)
         run: |
-          python -c "from app.services.embedding_service import calculate_cosine_similarity; print('✓ Import test passed')"
+          python -c "from app.services.embedding_service import calculate_cosine_similarity; print('✓ Embedding service OK')"
           python -c "from app.services.matching_service import match_candidate_with_job; print('✓ Matching service OK')"
-          python -c "from app.services.question_generator import generate_interview_questions; print('✓ Question generator OK')"
-          python -c "from app.services.evaluation_generator import generate_evaluation; print('✓ Evaluation generator OK')"
+          python -c "from app.services.question_generator import generate_first_question; print('✓ Question generator OK')"
+          python -c "from app.services.evaluation_generator import generate_complete_evaluation; print('✓ Evaluation generator OK')"
+          python -c "from app.services.answer_analyzer import analyze_answer; print('✓ Answer analyzer OK')"
         env:
           OPENAI_API_KEY: sk-test-fake-key
 
