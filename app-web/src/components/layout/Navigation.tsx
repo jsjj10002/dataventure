@@ -18,6 +18,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import NotificationPanel from './NotificationPanel';
 
 interface NavItem {
   name: string;
@@ -121,14 +122,7 @@ export default function Navigation() {
             {isAuthenticated ? (
               <>
                 {/* 알림 */}
-                <Button variant="ghost" size="icon" className="relative">
-                  <Bell className="h-5 w-5" />
-                  {notificationCount > 0 && (
-                    <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white">
-                      {notificationCount}
-                    </span>
-                  )}
-                </Button>
+                <NotificationPanel />
 
                 {/* 사용자 메뉴 */}
                 <div className="hidden md:flex md:items-center md:gap-2">
