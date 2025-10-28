@@ -1,0 +1,144 @@
+═══════════════════════════════════════════════════════════════
+  사용자가 직접 해야 하는 작업 (빠짐없이 정리)
+═══════════════════════════════════════════════════════════════
+
+📌 필수 작업 (30분, 순서대로 실행)
+═══════════════════════════════════════════════════════════════
+
+[ ] 1. 데이터베이스 마이그레이션
+    cd /workspace/service-core
+    npx prisma migrate dev --name sprint_8_9_enhanced_features
+    npx prisma generate
+    
+    확인: npx prisma migrate status
+    예상 결과: "Database schema is up to date!"
+
+[ ] 2. Python 의존성 설치
+    cd /workspace/service-ai
+    pip install numpy>=1.24.0
+    
+    확인: python -c "import numpy; print(numpy.__version__)"
+    예상 결과: "1.24.3" (또는 그 이상)
+
+[ ] 3. 환경 변수 확인
+    - service-ai/.env: OPENAI_API_KEY 확인
+    - service-core/.env: DATABASE_URL, JWT_SECRET 확인
+    - app-web/.env.local: NEXT_PUBLIC_CORE_API_URL 확인
+
+[ ] 4. 프론트엔드 빌드
+    cd /workspace/app-web
+    npm install
+    npm run build
+    
+    확인: "✓ Compiled successfully" 메시지
+
+[ ] 5. 서비스 실행 (3개 터미널)
+    터미널 1: cd /workspace/service-core && npm run dev
+    터미널 2: cd /workspace/service-ai && uvicorn app.main:app --reload --port 8000
+    터미널 3: cd /workspace/app-web && npm run dev
+    
+    확인:
+    - http://localhost:8080/health → OK
+    - http://localhost:8000/health → OK
+    - http://localhost:3000 → 새 홈페이지 표시
+
+═══════════════════════════════════════════════════════════════
+📌 권장 작업 (2-3시간, 기능 완성)
+═══════════════════════════════════════════════════════════════
+
+[ ] 6. 프론트엔드 API 연동 (6개 파일)
+    
+    파일 1: app-web/src/app/profile/candidate/page.tsx
+    - handleSubmit 함수에서 fetch() 호출 추가
+    - API: PUT /api/v1/candidates/:id/profile
+    
+    파일 2: app-web/src/app/profile/recruiter/page.tsx
+    - handleSubmit 함수에서 fetch() 호출 추가
+    - API: PUT /api/v1/recruiters/:id/profile
+    
+    파일 3: app-web/src/app/interview/start/page.tsx
+    - Socket.IO 연결 및 이벤트 처리
+    - handleSend에서 socket.emit() 호출
+    
+    파일 4: app-web/src/app/evaluation/[id]/page.tsx
+    - useEffect에서 평가 결과 조회
+    - API: GET /api/v1/evaluations/:interviewId
+    
+    파일 5: app-web/src/app/dashboard/recruiter/page.tsx
+    - 지원자 목록 및 통계 조회
+    - API: GET /api/v1/recruiters/applicants
+    
+    파일 6: app-web/src/app/search/page.tsx
+    - handleSearch에서 검색 API 호출
+    - API: GET /api/v1/search
+    
+    💡 상세 코드 예시: TODO_FOR_USER.md 작업 6 참고
+
+[ ] 7. 백엔드 API 구현 (7개 엔드포인트)
+    
+    생성할 파일:
+    - service-core/src/controllers/profileController.ts
+    - service-core/src/controllers/notificationController.ts
+    - service-core/src/controllers/searchController.ts
+    - service-core/src/routes/profile.ts
+    - service-core/src/routes/notification.ts
+    - service-core/src/routes/search.ts
+    - service-core/src/routes/upload.ts
+    
+    💡 상세 코드: TODO_FOR_USER.md 작업 7 참고
+
+[ ] 8. 파일 업로드 설정
+    
+    1. GCP Cloud Storage 버킷 생성
+       버킷 이름: flex-recruiter-files
+       위치: asia-northeast3
+    
+    2. CORS 설정
+       origin: ["http://localhost:3000"]
+    
+    3. 서비스 계정 권한
+       roles/storage.objectAdmin
+    
+    4. 업로드 라이브러리 설치
+       npm install multer @google-cloud/storage
+    
+    5. 환경 변수 추가
+       GCP_PROJECT_ID=your-project-id
+       GCP_STORAGE_BUCKET=flex-recruiter-files
+    
+    💡 상세 가이드: TODO_FOR_USER.md 작업 8 참고
+
+═══════════════════════════════════════════════════════════════
+📌 선택 작업 (향후)
+═══════════════════════════════════════════════════════════════
+
+[ ] 9. 음성 기능 구현 (STT/TTS)
+    pip install openai-whisper
+    
+[ ] 10. 3D 아바타
+    npm install @readyplayerme/rpm-react
+    
+[ ] 11. 프로덕션 배포
+    - Vercel (프론트엔드)
+    - GCP Cloud Run (백엔드)
+
+═══════════════════════════════════════════════════════════════
+🎯 요약
+═══════════════════════════════════════════════════════════════
+
+필수 5개 작업만 하면:
+✅ 모든 페이지가 로드됩니다
+✅ UI/UX를 확인할 수 있습니다
+✅ 프론트엔드가 완성됩니다
+
+추가로 작업 6-8을 하면:
+✅ 실제 데이터가 저장됩니다
+✅ AI 인터뷰가 작동합니다
+✅ 파일 업로드가 가능합니다
+
+═══════════════════════════════════════════════════════════════
+
+상세 가이드: TODO_FOR_USER.md (28KB, 1125 라인)
+빠른 시작: START_HERE.md (3.7KB)
+
+시작하세요! 🚀
