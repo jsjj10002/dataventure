@@ -236,17 +236,18 @@ export default function CandidateProfilePage() {
                       onChange={handlePhotoUpload}
                       disabled={uploadingPhoto}
                     />
-                    <label htmlFor="photo-upload">
-                      <Button type="button" variant="outline" disabled={uploadingPhoto} asChild>
-                        <span>
-                          {uploadingPhoto ? (
-                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> 업로드 중...</>
-                          ) : (
-                            <><Upload className="mr-2 h-4 w-4" /> 사진 업로드</>
-                          )}
-                        </span>
-                      </Button>
-                    </label>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      disabled={uploadingPhoto}
+                      onClick={() => document.getElementById('photo-upload')?.click()}
+                    >
+                      {uploadingPhoto ? (
+                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> 업로드 중...</>
+                      ) : (
+                        <><Upload className="mr-2 h-4 w-4" /> 사진 업로드</>
+                      )}
+                    </Button>
                   </div>
                 </div>
               </div>
