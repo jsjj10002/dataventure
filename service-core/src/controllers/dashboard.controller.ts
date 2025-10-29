@@ -3,10 +3,8 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/prisma';
 import { AppError } from '../middlewares/error.middleware';
-
-const prisma = new PrismaClient();
 
 /**
  * 채용담당자 프로필 조회 (없으면 자동 생성)

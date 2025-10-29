@@ -2,8 +2,13 @@ name: CD - Deploy to Production (GCP Cloud Run)
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:  # 수동 트리거 허용
+    branches: [main]
+  workflow_dispatch:
+
+# 동시성 제어: 프로덕션 배포는 순차적으로 진행
+concurrency:
+  group: deploy-production-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
@@ -16,7 +21,8 @@ jobs:
   deploy-service-core:
     name: Deploy Backend Core to Cloud Run (Production)
     runs-on: ubuntu-latest
-    environment: production  # 프로덕션 환경 승인 필요
+    timeout-minutes: 20
+    environment: production
     
     permissions:
       contents: read
@@ -68,6 +74,7 @@ jobs:
   deploy-service-ai:
     name: Deploy Backend AI to Cloud Run (Production)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment: production
     
     permissions:

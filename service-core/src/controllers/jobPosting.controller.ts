@@ -3,10 +3,8 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/prisma';
 import { AppError } from '../middlewares/error.middleware';
-
-const prisma = new PrismaClient();
 
 /**
  * 채용 공고 생성
@@ -19,10 +17,6 @@ export const createJobPosting = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    if (!req.user || req.user.role !== 'RECRUITER') {
-      throw new AppError('채용담당자만 공고를 생성할 수 있습니다.', 403);
-    }
-
     const {
       title,
       description,

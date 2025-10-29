@@ -2,7 +2,13 @@ name: CD - Deploy to Staging (GCP Cloud Run)
 
 on:
   push:
-    branches: [ develop ]
+    branches: [develop]
+  workflow_dispatch:
+
+# 동시성 제어: 동일한 브랜치에서 이전 배포 취소
+concurrency:
+  group: deploy-staging-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
@@ -15,6 +21,7 @@ jobs:
   deploy-service-core:
     name: Deploy Backend Core to Cloud Run
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     
     permissions:
       contents: read
@@ -66,6 +73,7 @@ jobs:
   deploy-service-ai:
     name: Deploy Backend AI to Cloud Run
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     
     permissions:
       contents: read

@@ -2,10 +2,10 @@
  * 인터뷰 세션 관리 서비스
  */
 
-import { PrismaClient, InterviewStatus, MessageRole, ContentType } from '@prisma/client';
+import prisma from '../utils/prisma';
+import { InterviewStatus, MessageRole, ContentType } from '@prisma/client';
 import axios from 'axios';
 
-const prisma = new PrismaClient();
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 
 /**

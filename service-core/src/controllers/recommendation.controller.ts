@@ -3,11 +3,10 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/prisma';
 import axios from 'axios';
 import { AppError } from '../middlewares/error.middleware';
 
-const prisma = new PrismaClient();
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 
 /**
@@ -21,10 +20,6 @@ export const recommendJobs = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    if (!req.user || req.user.role !== 'CANDIDATE') {
-      throw new AppError('구직자만 공고 추천을 받을 수 있습니다.', 403);
-    }
-
     const { limit = 5 } = req.query;
 
     // 사용자 프로필 조회 (최신 평가 결과 포함)

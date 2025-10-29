@@ -2,15 +2,21 @@ name: CI - Test & Lint
 
 on:
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
   push:
-    branches: [ develop ]
+    branches: [develop]
+
+# 동시성 제어: 동일한 PR/브랜치에서 이전 실행 취소
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # Backend Core 테스트
   test-service-core:
     name: Test Backend Core
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     services:
       postgres:
@@ -66,6 +72,7 @@ jobs:
   test-service-ai:
     name: Test Backend AI
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - name: Checkout 코드
@@ -76,21 +83,19 @@ jobs:
         with:
           python-version: '3.11'
       
-      - name: uv 설치
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - name: uv 설치 및 캐싱
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "service-ai/requirements.txt"
       
       - name: 의존성 설치
         working-directory: service-ai
-        run: |
-          uv venv
-          uv pip install -r requirements.txt
+        run: uv pip install --system -r requirements.txt
       
-      - name: 테스트 실행 (간단한 import 테스트)
+      - name: 테스트 실행
         working-directory: service-ai
         run: |
-          source .venv/bin/activate
           python -c "from app.services.embedding_service import calculate_cosine_similarity; print('✓ Import test passed')"
         env:
           OPENAI_API_KEY: sk-test-fake-key
@@ -99,6 +104,7 @@ jobs:
   test-app-web:
     name: Test Frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - name: Checkout 코드

@@ -3,10 +3,8 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/prisma';
 import { AppError } from '../middlewares/error.middleware';
-
-const prisma = new PrismaClient();
 
 /**
  * 지원서 제출
@@ -19,10 +17,6 @@ export const createApplication = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    if (!req.user || req.user.role !== 'CANDIDATE') {
-      throw new AppError('구직자만 지원할 수 있습니다.', 403);
-    }
-
     const { jobPostingId, coverLetter } = req.body;
 
     // 필수 필드 검증

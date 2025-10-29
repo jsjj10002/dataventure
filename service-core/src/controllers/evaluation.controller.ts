@@ -3,10 +3,8 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/prisma';
 import { AppError } from '../middlewares/error.middleware';
-
-const prisma = new PrismaClient();
 
 /**
  * 인터뷰 평가 조회

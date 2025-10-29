@@ -3,13 +3,11 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/prisma';
 import bcrypt from 'bcrypt';
 import { body, validationResult } from 'express-validator';
 import { generateToken } from '../utils/jwt';
 import { AppError } from '../middlewares/error.middleware';
-
-const prisma = new PrismaClient();
 
 /**
  * 회원가입 요청 검증 규칙
