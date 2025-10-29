@@ -175,6 +175,88 @@ def generate_next_question(
         return "말씀해주신 내용에 대해 더 자세히 설명해주시겠어요?"
 
 
+def generate_next_question_stream(
+    conversation_history: List[Dict[str, str]],
+    last_answer: str,
+    candidate_profile: Optional[Dict] = None,
+    job_posting: Optional[Dict] = None
+):
+    """
+    다음 인터뷰 질문 생성 (Streaming 버전)
+    
+    Args:
+        conversation_history: 이전 대화 기록
+        last_answer: 마지막 답변
+        candidate_profile: 구직자 프로필
+        job_posting: 채용 공고 정보
+    
+    Yields:
+        질문 텍스트 조각 (streaming)
+    """
+    
+    # 시스템 프롬프트
+    system_prompt = """당신은 전문적이고 친근한 HR 면접관입니다.
+이전 대화의 맥락을 고려하여 자연스러운 꼬리 질문을 생성해주세요.
+
+질문 생성 원칙:
+1. 이전 답변의 내용을 바탕으로 깊이 있는 후속 질문
+2. STAR 기법 활용 (Situation, Task, Action, Result)
+3. 구체적인 경험과 사례를 물어보기
+4. 기술적 역량과 소프트 스킬 균형있게 평가
+5. 한 번에 하나의 질문만 제시
+6. 한국어로 응답"""
+
+    # 대화 히스토리를 OpenAI 메시지 형식으로 변환
+    messages = [{"role": "system", "content": system_prompt}]
+    
+    # 컨텍스트 정보 추가
+    context_parts = ["이전 대화를 바탕으로 다음 질문을 생성해주세요."]
+    
+    if candidate_profile:
+        skills = candidate_profile.get("skills", [])
+        if skills:
+            context_parts.append(f"\n구직자 기술 스택: {', '.join(skills)}")
+    
+    if job_posting:
+        position = job_posting.get("position")
+        if position:
+            context_parts.append(f"\n지원 직무: {position}")
+    
+    messages.append({"role": "user", "content": "\n".join(context_parts)})
+    
+    # 대화 히스토리 추가 (최근 5개만)
+    for msg in conversation_history[-5:]:
+        role = "assistant" if msg["role"] == "AI" else "user"
+        messages.append({"role": role, "content": msg["content"]})
+    
+    # 마지막 답변 추가
+    if conversation_history and conversation_history[-1]["role"] == "AI":
+        messages.append({"role": "user", "content": last_answer})
+    
+    # 질문 생성 요청
+    messages.append({
+        "role": "user",
+        "content": "위 답변을 바탕으로 자연스러운 꼬리 질문을 생성해주세요. 답변의 구체적인 내용이나 경험에 대해 더 깊이 파고드는 질문이 좋습니다."
+    })
+    
+    # OpenAI Streaming API 호출
+    try:
+        stream = client.chat.completions.create(
+            model=os.getenv("OPENAI_MODEL", "gpt-4"),
+            messages=messages,
+            stream=True
+        )
+        
+        for chunk in stream:
+            if chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
+                
+    except Exception as e:
+        print(f"[Question Generator] OpenAI Streaming API 오류: {e}")
+        # 기본 질문 반환
+        yield "말씀해주신 내용에 대해 더 자세히 설명해주시겠어요?"
+
+
 def analyze_interview_depth(conversation_history: List[Dict[str, str]]) -> Dict[str, any]:
     """
     인터뷰 깊이 분석 (얼마나 깊이 있게 진행되었는지)

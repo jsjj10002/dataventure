@@ -42,10 +42,10 @@ export default function EvaluationPage() {
     loadEvaluation();
   }, [isAuthenticated, evaluationId]);
 
-  // 평가 결과 로드 (interviewId로 조회, 자동 재시도 포함)
+  // 평가 결과 로드 (evaluationId로 직접 조회, 자동 재시도 포함)
   const loadEvaluation = async (isRetry = false) => {
     if (!evaluationId) {
-      toast.error('인터뷰 ID를 찾을 수 없습니다.');
+      toast.error('평가 ID를 찾을 수 없습니다.');
       return;
     }
     
@@ -54,8 +54,8 @@ export default function EvaluationPage() {
     }
     
     try {
-      // interviewId로 평가 조회 시도
-      const response = await evaluationAPI.getByInterview(evaluationId);
+      // evaluationId로 평가 직접 조회
+      const response = await evaluationAPI.get(evaluationId);
       setEvaluation(response.data);
       setIsLoading(false);
       setIsRetrying(false);
@@ -129,23 +129,33 @@ export default function EvaluationPage() {
     ];
   };
 
-  // 추천 직무 파싱
+  // 추천 직무 파싱 (백엔드에서 이미 파싱된 배열을 반환하지만, 문자열일 수도 있음)
   const getRecommendedPositions = () => {
     if (!evaluation || !evaluation.recommendedPositions) return [];
     
     try {
-      return JSON.parse(evaluation.recommendedPositions);
+      // 이미 배열이면 그대로 반환
+      if (Array.isArray(evaluation.recommendedPositions)) {
+        return evaluation.recommendedPositions;
+      }
+      // 문자열이면 파싱
+      return JSON.parse(evaluation.recommendedPositions as string);
     } catch {
       return [];
     }
   };
 
-  // 강점/약점 파싱
+  // 강점/약점 파싱 (백엔드에서 이미 파싱된 배열을 반환하지만, 문자열일 수도 있음)
   const getStrengths = () => {
     if (!evaluation || !evaluation.strengthsJson) return [];
     
     try {
-      return JSON.parse(evaluation.strengthsJson);
+      // 이미 배열이면 그대로 반환
+      if (Array.isArray(evaluation.strengthsJson)) {
+        return evaluation.strengthsJson;
+      }
+      // 문자열이면 파싱
+      return JSON.parse(evaluation.strengthsJson as string);
     } catch {
       return [];
     }
@@ -155,7 +165,12 @@ export default function EvaluationPage() {
     if (!evaluation || !evaluation.weaknessesJson) return [];
     
     try {
-      return JSON.parse(evaluation.weaknessesJson);
+      // 이미 배열이면 그대로 반환
+      if (Array.isArray(evaluation.weaknessesJson)) {
+        return evaluation.weaknessesJson;
+      }
+      // 문자열이면 파싱
+      return JSON.parse(evaluation.weaknessesJson as string);
     } catch {
       return [];
     }

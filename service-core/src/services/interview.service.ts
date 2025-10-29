@@ -8,6 +8,9 @@ import axios from 'axios';
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 
+// 인터뷰 질문 생성 중인 세션 추적 (중복 방지)
+const processingInterviews = new Set<string>();
+
 /**
  * 새로운 인터뷰 세션 생성
  * @param candidateId 구직자 ID
@@ -193,6 +196,13 @@ export const generateNextQuestion = async (
   interviewId: string,
   lastAnswer: string
 ): Promise<string> => {
+  // 중복 처리 방지
+  if (processingInterviews.has(interviewId)) {
+    throw new Error('이미 질문 생성 중입니다.');
+  }
+  
+  processingInterviews.add(interviewId);
+  
   try {
     // 인터뷰 정보 조회
     const interview = await prisma.interview.findUnique({
@@ -251,6 +261,8 @@ export const generateNextQuestion = async (
   } catch (error) {
     console.error('[Interview Service] AI 질문 생성 실패:', error);
     throw error;
+  } finally {
+    processingInterviews.delete(interviewId);
   }
 };
 

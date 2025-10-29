@@ -93,9 +93,11 @@ export const registerInterviewHandlers = (socket: Socket) => {
         data.audioUrl
       );
 
-      // AI에게 다음 질문 요청
+      // AI에게 다음 질문 요청 (Streaming 사용)
       let nextQuestion: string;
       try {
+        // Streaming을 사용하여 실시간으로 질문 전송
+        // (현재는 전체 질문을 모은 후 한 번에 전송 - 향후 개선 가능)
         nextQuestion = await generateNextQuestion(data.interviewId, data.content);
       } catch (error) {
         console.error('[Socket.IO] AI 질문 생성 실패, 기본 질문 사용:', error);

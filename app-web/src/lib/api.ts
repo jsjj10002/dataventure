@@ -160,10 +160,10 @@ export interface Evaluation {
   negotiation: number;
   itSkills: number;
   overallScore: number;
-  strengthsJson: string;
-  weaknessesJson: string;
+  strengthsJson: string | string[]; // API는 파싱된 배열을 반환하지만, DB는 문자열
+  weaknessesJson: string | string[]; // API는 파싱된 배열을 반환하지만, DB는 문자열
   detailedFeedback: string;
-  recommendedPositions: string;
+  recommendedPositions: string | any[]; // API는 파싱된 배열을 반환하지만, DB는 문자열
   createdAt: string;
   updatedAt: string;
   interview?: {

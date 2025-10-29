@@ -11,7 +11,8 @@ import dynamic from 'next/dynamic';
 import { getSocket, connectSocket, onSocketEvent, offSocketEvent, emitSocketEvent, disconnectSocket } from '@/lib/socket-client';
 
 // 3D 아바타를 동적으로 로드 (SSR 비활성화)
-const AIAvatar3D = dynamic(() => import('@/components/interview/AIAvatar3D'), {
+// GLTF 기반 Ready Player Me 아바타 사용
+const AIAvatar3D = dynamic(() => import('@/components/interview/AIAvatarGLTF'), {
   ssr: false,
   loading: () => (
     <div className="flex items-center justify-center h-full">
@@ -124,13 +125,15 @@ function InterviewContent() {
       // AI 인사말 음성 재생 (모든 모드에서 재생)
       await speakText(greeting);
       
-      // 타이머 시작
-      startTimer();
-      
-      // 모든 모드에서 웹캠 자동 시작 (권한 요청)
-      setTimeout(() => {
-        startCamera();
-      }, 500);
+    // 타이머 시작
+    startTimer();
+    
+    // 웹캠 자동 시작 시도 (실패해도 인터뷰 진행)
+    setTimeout(() => {
+      startCamera().catch((err) => {
+        console.warn('카메라 시작 실패, 계속 진행:', err);
+      });
+    }, 500);
     } catch (error: any) {
       console.error('인터뷰 로드 실패:', error);
       toast.error('인터뷰를 불러오는데 실패했습니다.');
@@ -176,6 +179,9 @@ function InterviewContent() {
         });
       }
       
+      // 기존 리스너 제거 (중복 방지)
+      offSocketEvent('interview:question');
+      
       // AI 응답 수신 리스너 등록
       const questionListener = async (data: any) => {
         const aiMessage: Message = {
@@ -194,7 +200,6 @@ function InterviewContent() {
         await speakText(data.content);
         
         setIsSending(false);
-        offSocketEvent('interview:question', questionListener);
       };
       
       onSocketEvent('interview:question', questionListener);
@@ -212,9 +217,16 @@ function InterviewContent() {
     }
   };
 
-  // 웹캠 시작
+  // 웹캠 시작 (선택사항 - 기기 없어도 진행 가능)
   const startCamera = async () => {
     try {
+      // 미디어 기기 존재 여부 확인
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.warn('미디어 기기가 지원되지 않습니다. 카메라 없이 진행합니다.');
+        toast('카메라 없이 진행합니다.', { icon: 'ℹ️' });
+        return;
+      }
+
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true,
@@ -228,9 +240,21 @@ function InterviewContent() {
       }
       
       toast.success('카메라가 활성화되었습니다.');
-    } catch (error) {
+    } catch (error: any) {
       console.error('카메라 접근 실패:', error);
-      toast.error('카메라 접근 권한을 허용해주세요.');
+      
+      // 기기가 없거나 권한 거부 시에도 진행 가능
+      if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+        toast('카메라/마이크가 없습니다. 카메라 없이 진행합니다.', { icon: 'ℹ️' });
+      } else if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        toast('카메라 권한이 거부되었습니다. 카메라 없이 진행합니다.', { icon: 'ℹ️' });
+      } else {
+        toast('카메라를 사용할 수 없습니다. 카메라 없이 진행합니다.', { icon: 'ℹ️' });
+      }
+      
+      // 에러 발생해도 인터뷰는 계속 진행
+      setIsCameraOn(false);
+      setStream(null);
     }
   };
 
@@ -249,9 +273,23 @@ function InterviewContent() {
 
   // 음성 녹음 시작
   const startRecording = async () => {
+    // 스트림이 없으면 마이크만 요청
     if (!stream) {
-      toast.error('마이크 권한을 허용해주세요.');
-      return;
+      try {
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        setStream(audioStream);
+      } catch (error: any) {
+        console.error('마이크 접근 실패:', error);
+        
+        if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+          toast.error('마이크가 연결되어 있지 않습니다. 텍스트로 답변해주세요.');
+        } else if (error.name === 'NotAllowedError') {
+          toast.error('마이크 권한이 거부되었습니다. 텍스트로 답변해주세요.');
+        } else {
+          toast.error('마이크를 사용할 수 없습니다. 텍스트로 답변해주세요.');
+        }
+        return;
+      }
     }
     
     try {
