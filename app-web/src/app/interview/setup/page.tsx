@@ -31,7 +31,7 @@ export default function InterviewSetupPage() {
   const { user, isAuthenticated } = useAuthStore();
   
   // 인터뷰 설정
-  const [mode, setMode] = useState<'PRACTICE' | 'REAL'>('PRACTICE');
+  const [mode, setMode] = useState<'PRACTICE' | 'ACTUAL'>('PRACTICE');
   const [isVoiceMode, setIsVoiceMode] = useState(true);
   const [duration, setDuration] = useState(15); // 분
   const [isLoading, setIsLoading] = useState(false);
@@ -217,16 +217,16 @@ export default function InterviewSetupPage() {
                 {/* 실전 모드 */}
                 <button
                   type="button"
-                  onClick={() => setMode('REAL')}
+                  onClick={() => setMode('ACTUAL')}
                   className={`flex flex-col items-start gap-3 rounded-lg p-6 text-left transition-all ${
-                    mode === 'REAL'
+                    mode === 'ACTUAL'
                       ? 'border-[3px] border-blue-600 bg-blue-50 shadow-lg ring-2 ring-blue-300'
                       : 'border-2 border-gray-200 hover:border-gray-300'
                   }`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`rounded-full p-2 ${
-                      mode === 'REAL' ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600'
+                      mode === 'ACTUAL' ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600'
                     }`}>
                       <Play className="h-5 w-5" />
                     </div>
@@ -430,7 +430,7 @@ export default function InterviewSetupPage() {
           )}
 
           {/* 실전 모드 안내 */}
-          {mode === 'REAL' && (
+          {mode === 'ACTUAL' && (
             <Card className="border-amber-200 bg-amber-50">
               <CardHeader>
                 <CardTitle className="text-amber-900">실전 모드 안내</CardTitle>
@@ -457,6 +457,20 @@ export default function InterviewSetupPage() {
             >
               취소
             </Button>
+            
+            {/* 개발 테스트 버튼 (개발 환경에서만 표시) */}
+            {process.env.NODE_ENV === 'development' && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="lg"
+                onClick={() => router.push('/interview/test-chat')}
+              >
+                <MessageSquare className="mr-2 h-5 w-5" />
+                개발 테스트
+              </Button>
+            )}
+            
             <Button
               type="button"
               size="lg"

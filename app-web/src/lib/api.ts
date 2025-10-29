@@ -138,10 +138,10 @@ export interface RecruiterProfile {
 export interface Interview {
   id: string;
   candidateId: string;
-  mode: 'PRACTICE' | 'REAL';
+  mode: 'PRACTICE' | 'ACTUAL';
   timeLimitSeconds: number;
   isVoiceMode: boolean;
-  status: 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  status: 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED';
   startedAt: string;
   completedAt?: string;
   elapsedSeconds?: number;
@@ -242,7 +242,7 @@ export const interviewAPI = {
   complete: (id: string, data: { elapsedSeconds?: number }) => 
     apiClient.put(`/api/v1/interview/${id}/complete`, data),
   
-  addMessage: (id: string, data: { role: string; content: string; contentType?: string; audioUrl?: string }) => 
+  addMessage: (id: string, data: { role: 'AI' | 'CANDIDATE'; content: string; contentType?: 'TEXT' | 'AUDIO'; audioUrl?: string }) => 
     apiClient.post(`/api/v1/interview/${id}/message`, data),
 };
 

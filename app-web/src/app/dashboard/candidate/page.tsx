@@ -77,7 +77,7 @@ export default function CandidateDashboardPage() {
     if (!profile) return 0;
     
     let completed = 0;
-    const total = 8;
+    const total = 10; // 더 세밀한 평가를 위해 총 10개 항목으로 확장
     
     // 각 필드가 실제로 채워져 있는지 확인 (빈 문자열, null, undefined 체크)
     const hasValue = (value: any): boolean => {
@@ -94,16 +94,69 @@ export default function CandidateDashboardPage() {
       return true;
     };
     
+    // 각 필드의 깊이를 평가
     if (hasValue(profile.photoUrl)) completed++;
-    if (hasValue(profile.bio)) completed++;
+    
+    // 자기소개 (50자 이상일 때만 카운트)
+    if (hasValue(profile.bio) && profile.bio.trim().length >= 50) completed++;
+    
+    // 학력
     if (hasValue(profile.educationJson)) completed++;
+    
+    // 경력
     if (hasValue(profile.experienceJson)) completed++;
-    if (hasValue(profile.skillsJson)) completed++;
+    
+    // 프로젝트
+    if (hasValue(profile.projectsJson)) completed++;
+    
+    // 스킬 (3개 이상일 때만 카운트)
+    try {
+      const skills = Array.isArray(profile.skillsJson) ? profile.skillsJson : [];
+      if (skills.length >= 3) completed++;
+    } catch {}
+    
+    // 희망 직무
     if (hasValue(profile.desiredPosition)) completed++;
-    if (hasValue(profile.portfolioUrl) || hasValue(profile.githubUrl)) completed++;
+    
+    // 포트폴리오 또는 GitHub
+    if (hasValue(profile.portfolioUrl) || hasValue(profile.portfolioFileUrl) || hasValue(profile.githubUrl)) completed++;
+    
+    // 블로그 또는 LinkedIn
+    if (hasValue(profile.blogUrl) || hasValue(profile.linkedinUrl)) completed++;
+    
+    // 이력서
     if (hasValue(profile.resumeUrl)) completed++;
     
     return Math.round((completed / total) * 100);
+  };
+  
+  // 완성도에 따른 색상 반환
+  const getCompletenessColors = (percentage: number) => {
+    if (percentage <= 40) {
+      return {
+        card: 'border-amber-200 bg-amber-50',
+        text: 'text-amber-900',
+        textSecondary: 'text-amber-800',
+        bg: 'bg-amber-200',
+        bar: 'bg-amber-600',
+      };
+    } else if (percentage <= 70) {
+      return {
+        card: 'border-green-200 bg-green-50',
+        text: 'text-green-900',
+        textSecondary: 'text-green-800',
+        bg: 'bg-green-200',
+        bar: 'bg-green-600',
+      };
+    } else {
+      return {
+        card: 'border-blue-200 bg-blue-50',
+        text: 'text-blue-900',
+        textSecondary: 'text-blue-800',
+        bg: 'bg-blue-200',
+        bar: 'bg-blue-600',
+      };
+    }
   };
 
   if (isLoading) {
@@ -115,6 +168,7 @@ export default function CandidateDashboardPage() {
   }
 
   const profileCompleteness = getProfileCompleteness();
+  const colors = getCompletenessColors(profileCompleteness);
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -131,19 +185,23 @@ export default function CandidateDashboardPage() {
 
         {/* 프로필 완성도 */}
         {profileCompleteness < 100 && (
-          <Card className="mb-6 border-amber-200 bg-amber-50">
+          <Card className={`mb-6 ${colors.card}`}>
             <CardContent className="pt-6">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <h3 className="font-semibold text-amber-900 mb-2">
+                  <h3 className={`font-semibold ${colors.text} mb-2`}>
                     프로필을 완성하세요 ({profileCompleteness}%)
                   </h3>
-                  <p className="text-sm text-amber-800 mb-3">
-                    프로필이 완성되면 더 정확한 AI 평가와 추천을 받을 수 있습니다.
+                  <p className={`text-sm ${colors.textSecondary} mb-3`}>
+                    {profileCompleteness <= 40 
+                      ? '프로필 작성을 시작하세요! 더 많은 정보를 입력하면 AI 평가가 더 정확해집니다.'
+                      : profileCompleteness <= 70
+                      ? '좋은 진행입니다! 조금만 더 입력하면 완벽한 프로필이 됩니다.'
+                      : '거의 완성되었습니다! 몇 가지만 더 입력하면 완벽합니다.'}
                   </p>
-                  <div className="h-2 bg-amber-200 rounded-full overflow-hidden mb-3">
+                  <div className={`h-2 ${colors.bg} rounded-full overflow-hidden mb-3`}>
                     <div
-                      className="h-full bg-amber-600 transition-all"
+                      className={`h-full ${colors.bar} transition-all duration-500`}
                       style={{ width: `${profileCompleteness}%` }}
                     />
                   </div>

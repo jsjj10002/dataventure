@@ -3,6 +3,7 @@
  */
 
 export type InterviewStatus = 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED';
+export type InterviewMode = 'PRACTICE' | 'ACTUAL';
 export type MessageRole = 'AI' | 'CANDIDATE';
 export type ContentType = 'TEXT' | 'AUDIO';
 
@@ -19,6 +20,7 @@ export interface Interview {
   id: string;
   candidateId: string;
   jobPostingId?: string;
+  mode: InterviewMode;
   status: InterviewStatus;
   startedAt: string;
   completedAt?: string;

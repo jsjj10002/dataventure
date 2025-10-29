@@ -24,6 +24,8 @@ export default function RegisterPage() {
   // 비밀번호 검증 규칙
   const passwordRules = {
     minLength: password.length >= 6,
+    hasUpperCase: /[A-Z]/.test(password),
+    hasLowerCase: /[a-z]/.test(password),
     hasMatch: password.length > 0 && confirmPassword.length > 0 && password === confirmPassword,
   };
 
@@ -58,6 +60,16 @@ export default function RegisterPage() {
     
     if (password.length < 6) {
       toast.error('비밀번호는 최소 6자 이상이어야 합니다.');
+      return;
+    }
+    
+    if (!/[A-Z]/.test(password)) {
+      toast.error('비밀번호에 대문자를 포함해야 합니다.');
+      return;
+    }
+    
+    if (!/[a-z]/.test(password)) {
+      toast.error('비밀번호에 소문자를 포함해야 합니다.');
       return;
     }
     
@@ -231,6 +243,22 @@ export default function RegisterPage() {
                       )}
                       <span>최소 6자 이상</span>
                     </div>
+                    <div className={`flex items-center gap-2 ${passwordRules.hasUpperCase ? 'text-green-600' : 'text-red-600'}`}>
+                      {passwordRules.hasUpperCase ? (
+                        <CheckCircle className="h-4 w-4" />
+                      ) : (
+                        <X className="h-4 w-4" />
+                      )}
+                      <span>대문자 포함</span>
+                    </div>
+                    <div className={`flex items-center gap-2 ${passwordRules.hasLowerCase ? 'text-green-600' : 'text-red-600'}`}>
+                      {passwordRules.hasLowerCase ? (
+                        <CheckCircle className="h-4 w-4" />
+                      ) : (
+                        <X className="h-4 w-4" />
+                      )}
+                      <span>소문자 포함</span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -296,7 +324,7 @@ export default function RegisterPage() {
                 type="submit"
                 className="w-full"
                 size="lg"
-                disabled={isLoading || (password !== confirmPassword && password.length > 0)}
+                disabled={isLoading || !passwordRules.minLength || !passwordRules.hasUpperCase || !passwordRules.hasLowerCase || (password !== confirmPassword && password.length > 0)}
               >
                 {isLoading ? (
                   <>

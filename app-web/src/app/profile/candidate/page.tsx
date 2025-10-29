@@ -197,6 +197,11 @@ export default function CandidateProfilePage() {
       });
       
       toast.success('프로필이 저장되었습니다!');
+      
+      // 대시보드로 자동 이동 (0.5초 후)
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 500);
     } catch (error: any) {
       toast.error(error.response?.data?.error || '프로필 저장에 실패했습니다.');
     } finally {
@@ -235,7 +240,16 @@ export default function CandidateProfilePage() {
                 <Label>프로필 사진</Label>
                 <div className="mt-2 flex items-center gap-4">
                   {photoUrl ? (
-                    <img src={photoUrl} alt="Profile" className="h-20 w-20 rounded-full object-cover" />
+                    <img 
+                      src={photoUrl.startsWith('http') ? photoUrl : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}${photoUrl}`} 
+                      alt="Profile" 
+                      className="h-20 w-20 rounded-full object-cover border border-gray-200" 
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        target.parentElement!.innerHTML = '<div class="flex h-20 w-20 items-center justify-center rounded-full bg-gray-200"><svg class="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg></div>';
+                      }}
+                    />
                   ) : (
                     <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gray-200">
                       <Upload className="h-8 w-8 text-gray-400" />

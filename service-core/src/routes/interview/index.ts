@@ -26,6 +26,16 @@ router.post('/start', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: '구직자만 인터뷰를 시작할 수 있습니다.' });
     }
 
+    // mode 검증
+    const validModes = ['PRACTICE', 'ACTUAL'];
+    const interviewMode = mode?.toUpperCase() || 'PRACTICE';
+    
+    if (!validModes.includes(interviewMode)) {
+      return res.status(400).json({ 
+        error: `유효하지 않은 mode 값입니다. 허용된 값: ${validModes.join(', ')}` 
+      });
+    }
+
     // 프로필 조회
     const profile = await prisma.candidateProfile.findUnique({
       where: { userId },
@@ -44,7 +54,7 @@ router.post('/start', authenticateToken, async (req, res) => {
         skills: profile.skills, // 스키마 필드명 수정 (String[] 배열)
         desiredPosition: profile.desiredPosition,
       },
-      mode,
+      mode: interviewMode,
       selectedQuestions,
       customQuestions,
     });
@@ -55,9 +65,9 @@ router.post('/start', authenticateToken, async (req, res) => {
     const interview = await prisma.interview.create({
       data: {
         candidateId: userId,
-        mode: mode === 'PRACTICE' || mode === 'practice' ? 'PRACTICE' : 'ACTUAL',
+        mode: interviewMode,
         timeLimitSeconds: duration ? duration * 60 : 900, // 분을 초로 변환
-        isVoiceMode: mode === 'ACTUAL' || mode === 'actual',
+        isVoiceMode: interviewMode === 'ACTUAL',
         status: 'IN_PROGRESS',
       },
     });
@@ -70,6 +80,15 @@ router.post('/start', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('인터뷰 시작 오류:', error);
+    
+    // Prisma validation error 처리
+    if (error instanceof Error && error.message.includes('Invalid')) {
+      return res.status(400).json({ 
+        error: '잘못된 데이터 형식입니다.',
+        details: error.message 
+      });
+    }
+    
     res.status(500).json({ 
       error: '인터뷰 시작에 실패했습니다.',
       details: error instanceof Error ? error.message : '알 수 없는 오류'
@@ -180,6 +199,11 @@ router.post('/:id/message', authenticateToken, async (req, res) => {
       return res.status(401).json({ error: '인증이 필요합니다.' });
     }
 
+    // content 필수 검증
+    if (!content) {
+      return res.status(400).json({ error: '메시지 내용이 필요합니다.' });
+    }
+
     const interview = await prisma.interview.findUnique({
       where: { id },
     });
@@ -193,12 +217,31 @@ router.post('/:id/message', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: '권한이 없습니다.' });
     }
 
+    // enum 값 검증
+    const validRoles = ['AI', 'CANDIDATE'];
+    const validContentTypes = ['TEXT', 'AUDIO'];
+    
+    const messageRole = role || 'CANDIDATE';
+    const messageContentType = contentType || 'TEXT';
+    
+    if (!validRoles.includes(messageRole)) {
+      return res.status(400).json({ 
+        error: `유효하지 않은 role 값입니다. 허용된 값: ${validRoles.join(', ')}` 
+      });
+    }
+    
+    if (!validContentTypes.includes(messageContentType)) {
+      return res.status(400).json({ 
+        error: `유효하지 않은 contentType 값입니다. 허용된 값: ${validContentTypes.join(', ')}` 
+      });
+    }
+
     const message = await prisma.interviewMessage.create({
       data: {
         interviewId: id,
-        role: role || 'CANDIDATE',
+        role: messageRole,
         content,
-        contentType: contentType || 'TEXT',
+        contentType: messageContentType,
         audioUrl: audioUrl || null,
       },
     });
@@ -206,6 +249,15 @@ router.post('/:id/message', authenticateToken, async (req, res) => {
     res.json(message);
   } catch (error) {
     console.error('메시지 저장 오류:', error);
+    
+    // Prisma validation error 처리
+    if (error instanceof Error && error.message.includes('Invalid')) {
+      return res.status(400).json({ 
+        error: '잘못된 데이터 형식입니다.',
+        details: error.message 
+      });
+    }
+    
     res.status(500).json({ error: '메시지 저장에 실패했습니다.' });
   }
 });

@@ -129,6 +129,11 @@ export default function RecruiterProfilePage() {
       });
       
       toast.success('프로필이 저장되었습니다!');
+      
+      // 대시보드로 자동 이동 (0.5초 후)
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 500);
     } catch (error: any) {
       toast.error(error.response?.data?.error || '프로필 저장에 실패했습니다.');
     } finally {
@@ -167,7 +172,16 @@ export default function RecruiterProfilePage() {
                 <Label>회사 로고</Label>
                 <div className="mt-2 flex items-center gap-4">
                   {companyLogoUrl ? (
-                    <img src={companyLogoUrl} alt="Company Logo" className="h-20 w-20 rounded object-contain bg-gray-50 p-2 border" />
+                    <img 
+                      src={companyLogoUrl.startsWith('http') ? companyLogoUrl : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}${companyLogoUrl}`} 
+                      alt="Company Logo" 
+                      className="h-20 w-20 rounded object-contain bg-gray-50 p-2 border" 
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        target.parentElement!.innerHTML = '<div class="flex h-20 w-20 items-center justify-center rounded bg-gray-200"><svg class="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg></div>';
+                      }}
+                    />
                   ) : (
                     <div className="flex h-20 w-20 items-center justify-center rounded bg-gray-200">
                       <Building2 className="h-8 w-8 text-gray-400" />
