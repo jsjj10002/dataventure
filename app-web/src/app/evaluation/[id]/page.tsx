@@ -28,6 +28,8 @@ export default function EvaluationPage() {
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showScript, setShowScript] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
 
   // 인증 확인
   useEffect(() => {
@@ -40,33 +42,66 @@ export default function EvaluationPage() {
     loadEvaluation();
   }, [isAuthenticated, evaluationId]);
 
-  // 평가 결과 로드
-  const loadEvaluation = async () => {
+  // 평가 결과 로드 (interviewId로 조회, 자동 재시도 포함)
+  const loadEvaluation = async (isRetry = false) => {
     if (!evaluationId) {
-      toast.error('평가 ID를 찾을 수 없습니다.');
+      toast.error('인터뷰 ID를 찾을 수 없습니다.');
       return;
     }
     
-    setIsLoading(true);
+    if (!isRetry) {
+      setIsLoading(true);
+    }
     
     try {
-      const response = await evaluationAPI.get(evaluationId);
+      // interviewId로 평가 조회 시도
+      const response = await evaluationAPI.getByInterview(evaluationId);
       setEvaluation(response.data);
+      setIsLoading(false);
+      setIsRetrying(false);
+      
+      if (isRetry) {
+        toast.success('평가 결과를 불러왔습니다!');
+      }
     } catch (error: any) {
       console.error('평가 결과 로드 실패:', error);
       
+      // 404 에러 시 아직 평가가 생성되지 않음 - 자동 재시도
       if (error.response?.status === 404) {
-        toast.error('평가 결과를 찾을 수 없습니다. 평가가 진행 중일 수 있습니다.');
+        // 최대 10번까지 재시도 (3초 간격, 총 30초)
+        if (retryCount < 10) {
+          if (!isRetrying) {
+            setIsRetrying(true);
+            toast('평가 생성 중입니다... 잠시만 기다려주세요.', {
+              icon: '⏳',
+            });
+          }
+          
+          setRetryCount(prev => prev + 1);
+          
+          // 3초 후 재시도
+          setTimeout(() => {
+            loadEvaluation(true);
+          }, 3000);
+        } else {
+          // 재시도 횟수 초과
+          setIsLoading(false);
+          setIsRetrying(false);
+          toast.error('평가 생성이 지연되고 있습니다. 대시보드에서 나중에 확인해주세요.');
+          
+          setTimeout(() => {
+            router.push('/dashboard');
+          }, 2000);
+        }
       } else {
+        setIsLoading(false);
+        setIsRetrying(false);
         toast.error('평가 결과를 불러오는데 실패했습니다.');
+        
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 3000);
       }
-      
-      // 3초 후 대시보드로 이동
-      setTimeout(() => {
-        router.push('/dashboard');
-      }, 3000);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -139,7 +174,15 @@ export default function EvaluationPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-gray-600">평가 결과를 불러오는 중...</p>
+          {isRetrying ? (
+            <div>
+              <p className="text-gray-600 font-medium mb-2">평가 생성 중입니다...</p>
+              <p className="text-sm text-gray-500">AI가 인터뷰 내용을 분석하고 있습니다. ({retryCount}/10)</p>
+              <p className="text-xs text-gray-400 mt-2">평균 10-30초 소요됩니다.</p>
+            </div>
+          ) : (
+            <p className="text-gray-600">평가 결과를 불러오는 중...</p>
+          )}
         </div>
       </div>
     );

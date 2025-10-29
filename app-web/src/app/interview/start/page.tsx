@@ -2,13 +2,23 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Mic, MicOff, Volume2, VolumeX, Clock, X, MessageSquare, Subtitles } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX, Clock, X, MessageSquare, Subtitles, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/stores/authStore';
 import { interviewAPI } from '@/lib/api';
 import toast from 'react-hot-toast';
-import AIAvatar3D from '@/components/interview/AIAvatar3D';
+import dynamic from 'next/dynamic';
 import { getSocket, connectSocket, onSocketEvent, offSocketEvent, emitSocketEvent, disconnectSocket } from '@/lib/socket-client';
+
+// 3D 아바타를 동적으로 로드 (SSR 비활성화)
+const AIAvatar3D = dynamic(() => import('@/components/interview/AIAvatar3D'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-full">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  ),
+});
 
 interface Message {
   role: 'AI' | 'USER';

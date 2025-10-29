@@ -28,6 +28,7 @@ export default function TestChatPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const hasInitialized = useRef(false); // 중복 초기화 방지
   
   // 상태 관리
   const [isInitializing, setIsInitializing] = useState(true);
@@ -41,8 +42,13 @@ export default function TestChatPage() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [timerInterval, setTimerInterval] = useState<NodeJS.Timeout | null>(null);
   
-  // 인증 확인
+  // 인증 확인 및 인터뷰 초기화
   useEffect(() => {
+    // 이미 초기화했으면 중복 실행 방지
+    if (hasInitialized.current) {
+      return;
+    }
+    
     if (!isAuthenticated) {
       toast.error('로그인이 필요합니다.');
       router.push('/auth/login');
@@ -55,6 +61,7 @@ export default function TestChatPage() {
       return;
     }
     
+    hasInitialized.current = true; // 초기화 플래그 설정
     initializeInterview();
   }, [isAuthenticated, user]);
   
@@ -190,21 +197,12 @@ export default function TestChatPage() {
         clearInterval(timerInterval);
       }
       
-      // 인터뷰 완료 API 호출
+      // 인터뷰 완료 API 호출 (평가는 service-core에서 자동 생성됨)
       await interviewAPI.complete(interviewId, {
         elapsedSeconds,
       });
       
-      // 평가 요청 (service-ai)
-      try {
-        await apiClient.post(`${process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000'}/api/v1/evaluation/generate`, {
-          interviewId,
-        });
-      } catch (evalError) {
-        console.error('평가 생성 실패:', evalError);
-      }
-      
-      toast.success('인터뷰가 완료되었습니다!');
+      toast.success('인터뷰가 완료되었습니다! 평가가 생성 중입니다.');
       
       // 평가 결과 페이지로 이동
       setTimeout(() => {

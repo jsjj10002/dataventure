@@ -169,12 +169,133 @@ router.put('/:id/complete', authenticateToken, async (req, res) => {
       },
     });
 
-    // AI 서비스에 평가 요청 (비동기)
-    axios.post(`${AI_SERVICE_URL}/api/v1/evaluation/analyze`, {
-      interviewId: id,
-    }).catch(err => {
-      console.error('평가 요청 오류:', err);
-    });
+    // AI 서비스에서 평가 생성 및 저장 (비동기)
+    (async () => {
+      try {
+        console.log(`[평가 생성 시작] 인터뷰 ID: ${id}`);
+        
+        // 1. 메시지 조회
+        const messages = await prisma.interviewMessage.findMany({
+          where: { interviewId: id },
+          orderBy: { createdAt: 'asc' },
+        });
+
+        console.log(`[평가 생성] 메시지 ${messages.length}개 조회됨`);
+
+        if (messages.length < 2) {
+          console.error(`[평가 생성 실패] 메시지가 부족합니다. (${messages.length}개, 최소 2개 필요)`);
+          return;
+        }
+
+        // 2. 프로필 조회
+        const profile = await prisma.candidateProfile.findUnique({
+          where: { userId: interview.candidateId },
+        });
+
+        console.log(`[평가 생성] 프로필 조회: ${profile ? '성공' : '없음'}`);
+
+        // 3. AI 서비스 호출 (올바른 경로)
+        console.log(`[평가 생성] AI 서비스 호출 중... URL: ${AI_SERVICE_URL}/internal/ai/generate-evaluation`);
+        
+        // 프로필 데이터 준비 (JSON 문자열을 파싱)
+        let profileData = null;
+        if (profile) {
+          try {
+            profileData = {
+              education: profile.educationJson ? (typeof profile.educationJson === 'string' ? JSON.parse(profile.educationJson) : profile.educationJson) : null,
+              experience: profile.experienceJson ? (typeof profile.experienceJson === 'string' ? JSON.parse(profile.experienceJson) : profile.experienceJson) : null,
+              projects: profile.projectsJson ? (typeof profile.projectsJson === 'string' ? JSON.parse(profile.projectsJson) : profile.projectsJson) : null,
+              skills: profile.skillsJson ? (typeof profile.skillsJson === 'string' ? JSON.parse(profile.skillsJson) : profile.skillsJson) : null,
+              desiredPosition: profile.desiredPosition,
+              bio: profile.bio,
+            };
+          } catch (parseError) {
+            console.error('[평가 생성] 프로필 JSON 파싱 오류:', parseError);
+            // 파싱 실패 시 원본 데이터 사용
+            profileData = {
+              desiredPosition: profile.desiredPosition,
+              bio: profile.bio,
+            };
+          }
+        }
+        
+        const aiResponse = await axios.post(
+          `${AI_SERVICE_URL}/internal/ai/generate-evaluation`,
+          {
+            interviewId: id, // 필수 필드 추가
+            conversationHistory: messages.map(m => ({
+              role: m.role.toLowerCase(),
+              content: m.content
+            })),
+            candidateProfile: profileData,
+            jobPosting: null,
+          }
+        );
+
+        console.log(`[평가 생성] AI 서비스 응답 수신`);
+        console.log(`[평가 생성] 점수:`, JSON.stringify(aiResponse.data.scores, null, 2));
+
+        const { scores, feedback } = aiResponse.data;
+
+        // 4. 평가 결과를 DB에 저장
+        const evaluation = await prisma.evaluation.create({
+          data: {
+            interviewId: id,
+            // 점수 매핑 (AI 서비스 응답 형식에서 DB 스키마로)
+            deliveryScore: scores.communicationScore || 0,
+            vocabularyScore: scores.communicationScore || 0,
+            comprehensionScore: scores.communicationScore || 0,
+            communicationAvg: scores.communicationScore || 0,
+            informationAnalysis: scores.technicalScore || 0,
+            problemSolving: scores.problemSolvingScore || 0,
+            flexibleThinking: scores.problemSolvingScore || 0,
+            negotiation: scores.communicationScore || 0,
+            itSkills: scores.technicalScore || 0,
+            overallScore: scores.overallScore || 0,
+            strengthsJson: JSON.stringify(feedback.strengths || []),
+            weaknessesJson: JSON.stringify(feedback.weaknesses || []),
+            detailedFeedback: feedback.summary || '',
+            recommendedPositions: JSON.stringify([]),
+          },
+        });
+
+        console.log(`[평가 생성 완료] 평가 ID: ${evaluation.id}, 종합 점수: ${evaluation.overallScore}`);
+
+        // 5. 알림 생성
+        await prisma.notification.create({
+          data: {
+            userId: interview.candidateId,
+            type: 'EVALUATION_COMPLETED',
+            title: '인터뷰 평가 완료',
+            message: `${interview.mode === 'PRACTICE' ? '연습' : '실전'} 인터뷰 평가가 완료되었습니다. 종합 점수: ${evaluation.overallScore}점`,
+            link: `/evaluation/${id}`,
+          },
+        });
+
+        console.log(`[평가 생성] 알림 생성 완료`);
+      } catch (evalError) {
+        console.error('[평가 생성 오류] 상세 정보:', evalError);
+        if (evalError instanceof Error) {
+          console.error('[평가 생성 오류] 메시지:', evalError.message);
+          console.error('[평가 생성 오류] 스택:', evalError.stack);
+        }
+        
+        // 평가 생성 실패 시 알림
+        try {
+          await prisma.notification.create({
+            data: {
+              userId: interview.candidateId,
+              type: 'SYSTEM',
+              title: '평가 생성 지연',
+              message: '인터뷰 평가가 생성 중입니다. 잠시 후 확인해주세요.',
+              link: `/dashboard`,
+            },
+          });
+        } catch (notifError) {
+          console.error('[평가 생성] 알림 생성 오류:', notifError);
+        }
+      }
+    })();
 
     res.json({
       message: '인터뷰가 완료되었습니다. 평가가 진행 중입니다.',

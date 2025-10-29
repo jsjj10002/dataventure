@@ -24,6 +24,7 @@ export function PermissionTestModal({
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [micStream, setMicStream] = useState<MediaStream | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
+  const [isConfirming, setIsConfirming] = useState(false); // 중복 클릭 방지
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -32,6 +33,7 @@ export function PermissionTestModal({
 
   useEffect(() => {
     if (isOpen) {
+      setIsConfirming(false); // 모달 열릴 때 확인 중 상태 초기화
       requestPermissions();
     }
     
@@ -137,6 +139,11 @@ export function PermissionTestModal({
   };
 
   const handleConfirm = () => {
+    // 이미 확인 중이면 중복 실행 방지
+    if (isConfirming) {
+      return;
+    }
+    
     if (cameraPermission !== 'granted') {
       toast.error('카메라 권한이 필요합니다.');
       return;
@@ -147,6 +154,7 @@ export function PermissionTestModal({
       return;
     }
     
+    setIsConfirming(true); // 확인 중 플래그 설정
     cleanup();
     onConfirm();
   };
@@ -288,11 +296,11 @@ export function PermissionTestModal({
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={!canProceed}
+            disabled={!canProceed || isConfirming}
             className="flex-1"
             size="sm"
           >
-            {canProceed ? '인터뷰 시작' : '권한 허용 필요'}
+            {isConfirming ? '시작 중...' : canProceed ? '인터뷰 시작' : '권한 허용 필요'}
           </Button>
         </div>
       </DialogContent>
