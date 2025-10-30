@@ -17,6 +17,10 @@ export const createJobPosting = async (
   next: NextFunction
 ): Promise<void> => {
   try {
+    console.log('[JobPosting Controller] 요청 받음');
+    console.log('[JobPosting Controller] req.user:', req.user);
+    console.log('[JobPosting Controller] req.body:', req.body);
+
     const {
       title,
       description,
@@ -31,8 +35,28 @@ export const createJobPosting = async (
 
     // 필수 필드 검증
     if (!title || !description || !position) {
+      console.error('[JobPosting Controller] 필수 필드 누락:', { title, description, position });
       throw new AppError('필수 필드가 누락되었습니다.', 400);
     }
+
+    if (!req.user || !req.user.userId) {
+      console.error('[JobPosting Controller] 사용자 정보 없음:', req.user);
+      throw new AppError('인증된 사용자 정보가 없습니다.', 401);
+    }
+
+    console.log('[JobPosting Controller] userId:', req.user.userId);
+
+    // RecruiterProfile 조회 (userId로 찾기)
+    const recruiterProfile = await prisma.recruiterProfile.findUnique({
+      where: { userId: req.user.userId },
+    });
+
+    if (!recruiterProfile) {
+      console.error('[JobPosting Controller] RecruiterProfile 없음. userId:', req.user.userId);
+      throw new AppError('채용담당자 프로필을 찾을 수 없습니다.', 404);
+    }
+
+    console.log('[JobPosting Controller] recruiterProfile.id:', recruiterProfile.id);
 
     const jobPosting = await prisma.jobPosting.create({
       data: {
@@ -45,7 +69,7 @@ export const createJobPosting = async (
         salaryMax: salaryMax ?? null,
         requirements: requirements || [],
         preferredSkills: preferredSkills || [],
-        recruiterId: req.user.userId,
+        recruiterId: recruiterProfile.id, // RecruiterProfile.id 사용
         status: 'ACTIVE',
       },
     });

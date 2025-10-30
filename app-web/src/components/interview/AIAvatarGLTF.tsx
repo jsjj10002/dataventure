@@ -39,11 +39,12 @@ const VISEME_MAPPING: Record<string, string> = {
  * GLTF 3D 아바타 (Ready Player Me 기반)
  */
 function GLTFAvatar({ isSpeaking, emotion, mousePosition, modelUrl }: AIAvatarGLTFProps) {
-  // 기본 모델 URL (플레이스홀더 - Ready Player Me 데모 아바타)
-  // 실제 사용 시 Ready Player Me에서 생성한 아바타 URL로 교체
-  const DEFAULT_MODEL_URL = modelUrl || 'https://models.readyplayer.me/64bfa15f0e72c63d7c3934a0.glb';
+  // 환경변수에서 기본 모델 URL 가져오기 (없으면 공식 예시 사용)
+  const DEFAULT_MODEL_URL = modelUrl || 
+    process.env.NEXT_PUBLIC_AVATAR_MODEL_URL || 
+    'https://models.readyplayer.me/65a8dba831b23abb4f401bae.glb';
   
-  // GLTF 모델 로드
+  // GLTF 모델 로드 (에러는 Error Boundary에서 처리)
   const { scene, animations } = useGLTF(DEFAULT_MODEL_URL);
   
   // 모델 복제 (여러 인스턴스 사용 시 필요)
@@ -176,7 +177,7 @@ function GLTFAvatar({ isSpeaking, emotion, mousePosition, modelUrl }: AIAvatarGL
   });
   
   return (
-    <group ref={avatarRef}>
+    <group ref={avatarRef} scale={0.5} position={[0, 0, 0]}>
       <primitive object={clone} />
     </group>
   );
@@ -184,6 +185,7 @@ function GLTFAvatar({ isSpeaking, emotion, mousePosition, modelUrl }: AIAvatarGL
 
 /**
  * AIAvatarGLTF 컴포넌트 (Canvas 래퍼 포함)
+ * 에러 처리는 AvatarErrorBoundary에서 수행
  */
 export default function AIAvatarGLTF({
   isSpeaking = false,
@@ -195,14 +197,15 @@ export default function AIAvatarGLTF({
   return (
     <div className={`w-full h-full ${className}`}>
       <Canvas
-        camera={{ position: [0, 0.2, 1.5], fov: 50 }}
+        camera={{ position: [-0.016, 0.674, 0.494], fov: 50 }}
         gl={{ antialias: true, alpha: true }}
+        style={{ pointerEvents: 'none' }}
       >
-        {/* 조명 */}
-        <ambientLight intensity={0.6} />
+        {/* 조명 - 얼굴 클로즈업 최적화 */}
+        <ambientLight intensity={1.9} />
         <directionalLight
           position={[5, 5, 5]}
-          intensity={1}
+          intensity={1.3}
           castShadow
         />
         <pointLight position={[-5, 5, 0]} intensity={0.4} />
@@ -218,13 +221,25 @@ export default function AIAvatarGLTF({
           modelUrl={modelUrl}
         />
         
-        {/* 카메라 컨트롤 (개발용 - 프로덕션에서는 제거 가능) */}
-        {/* <OrbitControls enableZoom={false} /> */}
+        {/* 카메라 컨트롤 (얼굴/상반신 클로즈업 최적화) */}
+        <OrbitControls 
+          enableZoom={false}
+          enablePan={false}
+          enableRotate={false}
+          target={[0, 0.6, 0]}
+        />
       </Canvas>
-    </div>
+</div>
   );
 }
 
-// GLTF 모델 프리로드
-useGLTF.preload('https://models.readyplayer.me/64bfa15f0e72c63d7c3934a0.glb');
+// GLTF 모델 프리로드 (환경변수 또는 공식 예시 사용)
+const PRELOAD_URL = process.env.NEXT_PUBLIC_AVATAR_MODEL_URL || 
+  'https://models.readyplayer.me/65a8dba831b23abb4f401bae.glb';
+
+try {
+  useGLTF.preload(PRELOAD_URL);
+} catch (error) {
+  console.error('[AIAvatarGLTF] 프리로드 실패:', error);
+}
 

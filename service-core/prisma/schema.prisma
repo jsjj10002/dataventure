@@ -205,6 +205,11 @@ model Interview {
   mode            InterviewMode @default(PRACTICE)  // 연습/실전 모드
   timeLimitSeconds Int?        // 시간 제한 (초) - 연습: 300,600,900,1200 / 실전: 900
   isVoiceMode     Boolean @default(false)  // 음성 모드 여부
+  questionCount   Int?        // 선택한 질문 개수 (연습 모드)
+  
+  // 질문 계획 (JSON 형태로 저장)
+  // { questions: [{id, text, type, category, max_follow_ups, asked: false, follow_up_count: 0}], currentIndex: 0 }
+  questionPlanJson String?  @db.Text
   
   // 상태 및 시간
   status          InterviewStatus @default(IN_PROGRESS)

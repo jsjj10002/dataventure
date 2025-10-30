@@ -27,7 +27,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       token: null,
       isAuthenticated: false,
@@ -126,6 +126,22 @@ export const useAuthStore = create<AuthState>()(
         token: state.token,
         isAuthenticated: state.isAuthenticated,
       }),
+      // hydration 후 isAuthenticated 재계산
+      onRehydrateStorage: () => (state) => {
+        if (state && typeof window !== 'undefined') {
+          // localStorage에 token이 있으면 인증된 것으로 간주
+          const token = localStorage.getItem('token');
+          const user = state.user;
+          
+          if (token && user) {
+            state.isAuthenticated = true;
+          } else {
+            state.isAuthenticated = false;
+            state.user = null;
+            state.token = null;
+          }
+        }
+      },
     }
   )
 );

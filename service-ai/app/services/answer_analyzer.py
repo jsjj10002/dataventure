@@ -56,7 +56,7 @@ def analyze_single_answer(
 
     try:
         response = client.chat.completions.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-5"),
+            model=os.getenv("OPENAI_MODEL", "gpt-4o"),
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -99,14 +99,22 @@ def analyze_all_answers(conversation_history: List[Dict]) -> List[Dict]:
     
     analyzed_answers = []
     
-    # AI 질문과 사용자 답변을 쌍으로 묶기
-    for i in range(0, len(conversation_history) - 1, 2):
-        if conversation_history[i]["role"] == "AI" and \
-           i + 1 < len(conversation_history) and \
-           conversation_history[i + 1]["role"] == "CANDIDATE":
-            
+    # ✅ 디버깅: 대화 기록 출력
+    print(f"[Answer Analyzer] 전체 대화 기록 개수: {len(conversation_history)}")
+    for i, msg in enumerate(conversation_history):
+        print(f"  [{i}] role={msg.get('role', 'UNKNOWN')}, content={msg.get('content', '')[:50]}...")
+    
+    # ✅ 대소문자 무관 매칭 + 순차 검색 (2씩 건너뛰지 않음)
+    for i in range(0, len(conversation_history) - 1):
+        current_role = conversation_history[i].get("role", "").upper()
+        next_role = conversation_history[i + 1].get("role", "").upper()
+        
+        # AI 질문 다음에 CANDIDATE 답변이 오는 경우
+        if current_role in ["AI", "ASSISTANT"] and next_role in ["CANDIDATE", "USER"]:
             question = conversation_history[i]["content"]
             answer = conversation_history[i + 1]["content"]
+            
+            print(f"[Answer Analyzer] Q&A 쌍 발견: Q={question[:30]}... A={answer[:30]}...")
             
             analysis = analyze_single_answer(question, answer)
             analysis["question"] = question
@@ -114,6 +122,7 @@ def analyze_all_answers(conversation_history: List[Dict]) -> List[Dict]:
             
             analyzed_answers.append(analysis)
     
+    print(f"[Answer Analyzer] 분석된 답변 개수: {len(analyzed_answers)}")
     return analyzed_answers
 
 
@@ -167,4 +176,78 @@ def calculate_aggregate_scores(analyzed_answers: List[Dict]) -> Dict:
         "communication_std": round(float(np.std(communication_scores)), 2),
         "problem_solving_std": round(float(np.std(problem_solving_scores)), 2)
     }
+
+
+def generate_instant_feedback(
+    question: str,
+    answer: str,
+    question_type: str = "competency"
+) -> Dict:
+    """
+    답변에 대한 즉시 피드백 생성 (채팅 모드용)
+    
+    Args:
+        question: 질문
+        answer: 답변
+        question_type: 질문 타입 (ice_breaking|common|competency)
+    
+    Returns:
+        피드백 딕셔너리 (feedback, strengths, improvements, score)
+    """
+    
+    system_prompt = """당신은 친절하고 전문적인 HR 면접 코치입니다.
+구직자의 답변에 대해 즉시 피드백을 제공합니다.
+
+피드백 작성 원칙:
+1. 긍정적이고 건설적인 톤
+2. 구체적인 예시와 함께 설명
+3. 간결하고 실행 가능한 조언
+4. 3-4문장 내외로 간략하게
+
+JSON 형식으로 응답하세요:
+{
+  "feedback": "전체 피드백 (3-4문장)",
+  "strengths": ["강점 1", "강점 2"],
+  "improvements": ["개선점 1", "개선점 2"],
+  "score": 85
+}"""
+    
+    user_prompt = f"""질문: {question}
+
+답변: {answer}
+
+질문 유형: {question_type}
+
+위 답변에 대한 즉시 피드백을 제공해주세요."""
+    
+    try:
+        response = client.chat.completions.create(
+            model=os.getenv("OPENAI_MODEL", "gpt-4o"),
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            response_format={"type": "json_object"}
+        )
+        
+        result = json.loads(response.choices[0].message.content)
+        
+        # 점수 검증 (0-100 범위)
+        result["score"] = max(0, min(100, result.get("score", 70)))
+        
+        # 강점/개선점 개수 제한 (각 최대 3개)
+        result["strengths"] = result.get("strengths", [])[:3]
+        result["improvements"] = result.get("improvements", [])[:3]
+        
+        return result
+        
+    except Exception as e:
+        print(f"[Answer Analyzer] 즉시 피드백 생성 오류: {e}")
+        # 기본 피드백 반환
+        return {
+            "feedback": "답변해주셔서 감사합니다. 더 구체적인 예시를 포함하면 더 좋은 답변이 될 수 있습니다.",
+            "strengths": ["성실하게 답변해주셨습니다."],
+            "improvements": ["구체적인 경험이나 예시를 추가해보세요.", "STAR 기법을 활용해보세요."],
+            "score": 70
+        }
 

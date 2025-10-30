@@ -28,17 +28,19 @@ export default function CreateJobPostingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
+    position: '', // 직무명 (백엔드 필수 필드)
     location: '',
     employmentType: 'FULL_TIME',
     salaryMin: '',
     salaryMax: '',
-    experienceRequired: '',
+    experienceMin: '', // 최소 경력 (년)
+    experienceMax: '', // 최대 경력 (년)
     educationRequired: '',
     deadline: '',
     description: '',
-    requirements: '',
+    requirements: '', // 필수 요건 (쉼표로 구분)
+    preferredSkills: '', // 우대 사항 (쉼표로 구분)
     benefits: '',
-    tags: '',
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -55,43 +57,57 @@ export default function CreateJobPostingPage() {
     }
 
     // 필수 필드 검증
-    if (!formData.title || !formData.location || !formData.description) {
-      toast.error('필수 항목을 모두 입력해주세요.');
+    if (!formData.title || !formData.position || !formData.description) {
+      toast.error('제목, 직무명, 설명은 필수 항목입니다.');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      // Tags를 배열로 변환
-      const tags = formData.tags
+      // requirements를 배열로 변환
+      const requirements = formData.requirements
         .split(',')
-        .map(tag => tag.trim())
-        .filter(tag => tag.length > 0);
+        .map(req => req.trim())
+        .filter(req => req.length > 0);
+
+      // preferredSkills를 배열로 변환
+      const preferredSkills = formData.preferredSkills
+        .split(',')
+        .map(skill => skill.trim())
+        .filter(skill => skill.length > 0);
 
       // 급여를 숫자로 변환
       const salaryMin = formData.salaryMin ? parseInt(formData.salaryMin) : undefined;
       const salaryMax = formData.salaryMax ? parseInt(formData.salaryMax) : undefined;
 
-      await jobPostingAPI.createJobPosting({
+      // 경력을 숫자로 변환
+      const experienceMin = formData.experienceMin ? parseInt(formData.experienceMin) : undefined;
+      const experienceMax = formData.experienceMax ? parseInt(formData.experienceMax) : undefined;
+
+      const payload = {
         title: formData.title,
-        location: formData.location,
-        employmentType: formData.employmentType as 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'INTERNSHIP',
+        position: formData.position,
+        description: formData.description,
+        requirements: requirements.length > 0 ? requirements : undefined,
+        preferredSkills: preferredSkills.length > 0 ? preferredSkills : undefined,
+        experienceMin,
+        experienceMax,
         salaryMin,
         salaryMax,
-        experienceRequired: formData.experienceRequired || undefined,
-        educationRequired: formData.educationRequired || undefined,
-        deadline: formData.deadline ? new Date(formData.deadline).toISOString() : undefined,
-        description: formData.description,
-        requirements: formData.requirements || undefined,
-        benefits: formData.benefits || undefined,
-        tags,
-      });
+      };
+
+      console.log('[채용 공고 등록] 전송 데이터:', payload);
+
+      await jobPostingAPI.createJobPosting(payload);
 
       toast.success('채용 공고가 성공적으로 등록되었습니다!');
       router.push('/dashboard/recruiter');
     } catch (error: any) {
       console.error('채용 공고 등록 실패:', error);
-      toast.error(error.response?.data?.message || '채용 공고 등록에 실패했습니다.');
+      console.error('응답 데이터:', error.response?.data);
+      console.error('응답 상태:', error.response?.status);
+      const errorMsg = error.response?.data?.message || error.response?.data?.error || '채용 공고 등록에 실패했습니다.';
+      toast.error(errorMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -144,21 +160,37 @@ export default function CreateJobPostingPage() {
                   </div>
                 </div>
 
+                {/* 직무명 */}
+                <div className="space-y-2">
+                  <Label htmlFor="position">
+                    직무명 <span className="text-red-500">*</span>
+                  </Label>
+                  <div className="relative">
+                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <Input
+                      id="position"
+                      name="position"
+                      placeholder="예: 백엔드 개발자, 프론트엔드 개발자, 데이터 분석가"
+                      value={formData.position}
+                      onChange={handleChange}
+                      className="pl-10"
+                      required
+                    />
+                  </div>
+                </div>
+
                 {/* 근무 지역 */}
                 <div className="space-y-2">
-                  <Label htmlFor="location">
-                    근무 지역 <span className="text-red-500">*</span>
-                  </Label>
+                  <Label htmlFor="location">근무 지역</Label>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                     <Input
                       id="location"
                       name="location"
-                      placeholder="예: 서울 강남구"
+                      placeholder="예: 서울 강남구 (선택 사항)"
                       value={formData.location}
                       onChange={handleChange}
                       className="pl-10"
-                      required
                     />
                   </div>
                 </div>
@@ -214,33 +246,52 @@ export default function CreateJobPostingPage() {
                   </div>
                 </div>
 
-                {/* 경력 & 학력 */}
+                {/* 경력 범위 */}
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="experienceRequired">필요 경력</Label>
+                    <Label htmlFor="experienceMin">최소 경력 (년)</Label>
                     <Input
-                      id="experienceRequired"
-                      name="experienceRequired"
-                      placeholder="예: 3년 이상"
-                      value={formData.experienceRequired}
+                      id="experienceMin"
+                      name="experienceMin"
+                      type="number"
+                      placeholder="0"
+                      value={formData.experienceMin}
                       onChange={handleChange}
+                      min="0"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="educationRequired">필요 학력</Label>
+                    <Label htmlFor="experienceMax">최대 경력 (년)</Label>
                     <Input
-                      id="educationRequired"
-                      name="educationRequired"
-                      placeholder="예: 대졸 이상"
-                      value={formData.educationRequired}
+                      id="experienceMax"
+                      name="experienceMax"
+                      type="number"
+                      placeholder="10"
+                      value={formData.experienceMax}
                       onChange={handleChange}
+                      min="0"
                     />
                   </div>
                 </div>
 
-                {/* 마감일 */}
+                {/* 학력 요건 (참고용) */}
                 <div className="space-y-2">
-                  <Label htmlFor="deadline">지원 마감일</Label>
+                  <Label htmlFor="educationRequired">필요 학력 (참고용)</Label>
+                  <Input
+                    id="educationRequired"
+                    name="educationRequired"
+                    placeholder="예: 대졸 이상 (이 정보는 저장되지 않습니다)"
+                    value={formData.educationRequired}
+                    onChange={handleChange}
+                  />
+                  <p className="text-xs text-gray-500">
+                    * 현재 백엔드 스키마에 학력 필드가 없어 저장되지 않습니다.
+                  </p>
+                </div>
+
+                {/* 마감일 (참고용) */}
+                <div className="space-y-2">
+                  <Label htmlFor="deadline">지원 마감일 (참고용)</Label>
                   <div className="relative">
                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                     <Input
@@ -252,6 +303,9 @@ export default function CreateJobPostingPage() {
                       className="pl-10"
                     />
                   </div>
+                  <p className="text-xs text-gray-500">
+                    * 현재 백엔드 스키마에 마감일 필드가 없어 저장되지 않습니다.
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -279,46 +333,54 @@ export default function CreateJobPostingPage() {
                   />
                 </div>
 
-                {/* 자격 요건 */}
+                {/* 필수 요건 */}
                 <div className="space-y-2">
-                  <Label htmlFor="requirements">자격 요건</Label>
+                  <Label htmlFor="requirements">필수 요건</Label>
                   <Textarea
                     id="requirements"
                     name="requirements"
-                    placeholder="필수 기술, 경험 등을 입력하세요."
+                    placeholder="쉼표(,)로 구분하여 입력하세요.&#10;예: Python 3년 이상, Django 경험, RESTful API 설계"
                     value={formData.requirements}
                     onChange={handleChange}
                     rows={4}
                   />
+                  <p className="text-xs text-gray-500">
+                    * 쉼표(,)로 구분하여 입력하면 배열로 저장됩니다.
+                  </p>
                 </div>
 
-                {/* 복리후생 */}
+                {/* 우대 사항 */}
                 <div className="space-y-2">
-                  <Label htmlFor="benefits">복리후생</Label>
+                  <Label htmlFor="preferredSkills">우대 사항</Label>
+                  <Textarea
+                    id="preferredSkills"
+                    name="preferredSkills"
+                    placeholder="쉼표(,)로 구분하여 입력하세요.&#10;예: AWS 경험, Docker/K8s, 팀 리딩 경험"
+                    value={formData.preferredSkills}
+                    onChange={handleChange}
+                    rows={4}
+                  />
+                  <p className="text-xs text-gray-500">
+                    * 쉼표(,)로 구분하여 입력하면 배열로 저장됩니다.
+                  </p>
+                </div>
+
+                {/* 복리후생 (참고용) */}
+                <div className="space-y-2">
+                  <Label htmlFor="benefits">복리후생 (참고용)</Label>
                   <Textarea
                     id="benefits"
                     name="benefits"
-                    placeholder="제공하는 복리후생을 입력하세요."
+                    placeholder="제공하는 복리후생을 입력하세요. (이 정보는 저장되지 않습니다)"
                     value={formData.benefits}
                     onChange={handleChange}
                     rows={4}
                   />
-                </div>
-
-                {/* 태그 */}
-                <div className="space-y-2">
-                  <Label htmlFor="tags">태그</Label>
-                  <Input
-                    id="tags"
-                    name="tags"
-                    placeholder="React, TypeScript, Node.js (쉼표로 구분)"
-                    value={formData.tags}
-                    onChange={handleChange}
-                  />
-                  <p className="text-sm text-gray-500">
-                    쉼표(,)로 구분하여 입력하세요.
+                  <p className="text-xs text-gray-500">
+                    * 현재 백엔드 스키마에 복리후생 필드가 없어 저장되지 않습니다.
                   </p>
                 </div>
+
               </CardContent>
             </Card>
 
@@ -370,4 +432,5 @@ export default function CreateJobPostingPage() {
     </div>
   );
 }
+
 

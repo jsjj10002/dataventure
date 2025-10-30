@@ -38,7 +38,7 @@ const config: Config = {
         sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
       },
       backgroundImage: {
-        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+        'gradient-radial': 'radial-gradient(circle at center, var(--tw-gradient-stops))',
       },
       animation: {
         'fade-in': 'fade-in 0.5s ease-out',

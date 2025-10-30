@@ -87,7 +87,7 @@ async def text_to_speech_korean(request: TTSRequest):
         
         # 한국어에 적합한 음성으로 자동 설정
         # alloy: 중성적, nova: 여성, onyx: 남성
-        voice = request.voice if request.voice else "alloy"
+        voice = request.voice if request.voice else "onyx"
         
         # TTS 생성
         response = client.audio.speech.create(

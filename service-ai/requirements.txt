@@ -5,6 +5,15 @@ uvicorn[standard]==0.30.0
 # OpenAI API
 openai==1.35.0
 
+# ElevenLabs TTS
+elevenlabs==1.2.2
+
+# 오디오 처리
+pydub==0.25.1
+
+# WebSocket
+websockets==12.0
+
 # Sentence-Transformers (임베딩)
 sentence-transformers==3.0.0
 torch==2.3.0  # CPU 버전 (GPU 사용 시 별도 설치)

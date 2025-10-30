@@ -9,6 +9,8 @@
 - 눈 깜빡임 애니메이션
 - 마우스 추적 시선 처리
 - 숨쉬기 애니메이션
+- **에러 핸들링 및 Fallback 메커니즘** (404 에러 시 자동 전환)
+- **환경변수 기반 아바타 URL 관리**
 
 ### 🔑 API Key 필요 여부
 
@@ -66,11 +68,24 @@ window.addEventListener('message', (event) => {
 
 ### 2. 코드에 적용
 
+**권장: 환경변수 사용**
+
+```bash
+# app-web/.env.local 파일 생성 또는 수정
+NEXT_PUBLIC_AVATAR_MODEL_URL=https://models.readyplayer.me/YOUR_AVATAR_ID.glb
+```
+
+프로젝트는 자동으로 환경변수를 읽어 사용합니다. 코드 수정 불필요!
+
+**대안: 직접 코드 수정**
+
 ```typescript
 // app-web/src/components/interview/AIAvatarGLTF.tsx
 
-// 방법 1: 기본 URL 교체
-const DEFAULT_MODEL_URL = 'https://models.readyplayer.me/YOUR_AVATAR_ID.glb';
+// 방법 1: 기본 URL 교체 (47-51번 줄)
+const DEFAULT_MODEL_URL = modelUrl || 
+  process.env.NEXT_PUBLIC_AVATAR_MODEL_URL || 
+  'https://models.readyplayer.me/YOUR_AVATAR_ID.glb';
 
 // 방법 2: Props로 전달
 <AIAvatarGLTF 
@@ -82,9 +97,13 @@ const DEFAULT_MODEL_URL = 'https://models.readyplayer.me/YOUR_AVATAR_ID.glb';
 
 ### 3. 프리로드 (성능 최적화)
 
+프로젝트는 자동으로 환경변수의 아바타를 프리로드합니다.
+
 ```typescript
-// 컴포넌트 외부에서 프리로드
-useGLTF.preload('https://models.readyplayer.me/YOUR_AVATAR_ID.glb');
+// AIAvatarGLTF.tsx 하단에 자동 포함됨
+const PRELOAD_URL = process.env.NEXT_PUBLIC_AVATAR_MODEL_URL || 
+  'https://models.readyplayer.me/65a8dba831b23abb4f401bae.glb';
+useGLTF.preload(PRELOAD_URL);
 ```
 
 ---
@@ -365,11 +384,37 @@ Studio → API Keys → Permissions:
 
 ## 🆘 문제 해결
 
-### Q: 모델이 로드되지 않아요
+### Q: 404 에러 - 모델을 로드할 수 없어요
+**A: 가장 흔한 문제! 다음을 확인하세요:**
+
+1. **아바타 ID 유효성 확인**
+   - Ready Player Me의 draft 아바타는 24시간 후 만료됩니다
+   - 만료된 아바타는 404 에러를 반환합니다
+   - 해결: https://readyplayer.me/ 에서 새로운 아바타를 생성하세요
+
+2. **URL 형식 확인**
+   ```
+   ✅ 올바른 형식: https://models.readyplayer.me/65a8dba831b23abb4f401bae.glb
+   ❌ 잘못된 형식: https://api.readyplayer.me/... (API 엔드포인트)
+   ```
+
+3. **환경변수 설정** (프로젝트에서 권장)
+   ```bash
+   # app-web/.env.local
+   NEXT_PUBLIC_AVATAR_MODEL_URL=https://models.readyplayer.me/YOUR_AVATAR_ID.glb
+   ```
+
+4. **에러 핸들링 확인**
+   - 프로젝트에는 자동 fallback 메커니즘이 구현되어 있습니다
+   - GLTF 로딩 실패 시 기본 3D 아바타로 자동 전환됩니다
+   - 콘솔에서 `[AIAvatarGLTF]` 또는 `[AvatarErrorBoundary]` 로그를 확인하세요
+
+### Q: 모델이 로드되지 않아요 (기타 원인)
 **A:** 
 1. URL 형식 확인: `https://models.readyplayer.me/[ID].glb`
 2. Network 탭에서 404/403 확인
 3. CORS 문제는 Ready Player Me가 자동 허용
+4. 브라우저 콘솔에서 에러 메시지 확인
 
 ### Q: 립싱크가 작동하지 않아요
 **A:**

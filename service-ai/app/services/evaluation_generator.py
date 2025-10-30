@@ -103,7 +103,7 @@ JSON 형식으로 응답하세요:
     
     try:
         response = client.chat.completions.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-5"),
+            model=os.getenv("OPENAI_MODEL", "gpt-4o"),
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -176,7 +176,75 @@ def generate_complete_evaluation(
         calculate_aggregate_scores
     )
     
-    # 1. 모든 답변 분석
+    # 구직자 답변 개수 확인 (최소 요구 완화: 1개 이상)
+    candidate_answers = [
+        msg for msg in conversation_history 
+        if msg.get("role") in ["user", "candidate", "USER", "CANDIDATE"]
+    ]
+    
+    # 답변이 없으면 기본 평가 반환
+    if len(candidate_answers) < 1:
+        return {
+            "scores": {
+                "technicalScore": 0,
+                "communicationScore": 0,
+                "problemSolvingScore": 0,
+                "overallScore": 0
+            },
+            "statistics": {
+                "technical_avg": 0,
+                "communication_avg": 0,
+                "problem_solving_avg": 0
+            },
+            "feedback": {
+                "summary": "평가할 답변이 없습니다. 인터뷰를 진행하지 않았거나 대화 기록이 저장되지 않았습니다.",
+                "strengths": [],
+                "weaknesses": [],
+                "recommendations": ["다음에는 인터뷰를 끝까지 완료해보세요."],
+                "technical_feedback": "",
+                "communication_feedback": "",
+                "problem_solving_feedback": ""
+            },
+            "analyzed_answers": []
+        }
+    
+    # 답변이 1개만 있으면 간단한 평가 반환
+    if len(candidate_answers) == 1:
+        answer_text = candidate_answers[0].get("content", "")
+        answer_length = len(answer_text)
+        
+        # 답변 길이에 따른 간단한 점수
+        base_score = min(60, 30 + (answer_length // 10))
+        
+        return {
+            "scores": {
+                "technicalScore": base_score,
+                "communicationScore": base_score,
+                "problemSolvingScore": base_score,
+                "overallScore": base_score
+            },
+            "statistics": {
+                "technical_avg": base_score / 10,
+                "communication_avg": base_score / 10,
+                "problem_solving_avg": base_score / 10
+            },
+            "feedback": {
+                "summary": f"답변이 1개만 있어 정확한 평가가 어렵습니다. 더 많은 질문에 답변하시면 상세한 평가를 받으실 수 있습니다.",
+                "strengths": ["인터뷰에 참여해주셔서 감사합니다."],
+                "weaknesses": ["충분한 답변을 제공하지 못했습니다."],
+                "recommendations": [
+                    "다음 인터뷰에서는 더 많은 질문에 답변해보세요.",
+                    "각 질문에 구체적인 예시를 포함하여 답변해보세요.",
+                    "STAR 기법(Situation, Task, Action, Result)을 활용해보세요."
+                ],
+                "technical_feedback": "충분한 답변이 없어 기술 역량을 평가할 수 없습니다.",
+                "communication_feedback": "더 많은 답변을 통해 커뮤니케이션 능력을 보여주세요.",
+                "problem_solving_feedback": "문제 해결 경험에 대한 답변이 필요합니다."
+            },
+            "analyzed_answers": []
+        }
+    
+    # 1. 모든 답변 분석 (답변이 2개 이상인 경우)
     analyzed_answers = analyze_all_answers(conversation_history)
     
     # 2. 집계 점수 계산

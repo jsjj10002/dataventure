@@ -136,18 +136,27 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return JSON.stringify(data);
     };
 
+    // Prisma 스키마 필드명과 매핑
+    const updateData: any = {};
+    
+    if (companyName !== undefined) updateData.companyName = companyName;
+    if (companyLogoUrl !== undefined) updateData.companyLogo = companyLogoUrl;  // companyLogoUrl → companyLogo
+    if (companyDescription !== undefined) updateData.companyDescription = companyDescription;
+    if (companyWebsite !== undefined) updateData.companyUrl = companyWebsite;  // companyWebsite → companyUrl
+    if (position !== undefined) updateData.position = position;
+    if (idealCandidate !== undefined) updateData.companyVision = idealCandidate;  // idealCandidate → companyVision
+    
+    // 스키마에 없는 필드는 로그만 남기고 무시
+    if (department !== undefined) {
+      console.log(`[Profile Update] department 필드는 스키마에 없어 무시됨: ${department}`);
+    }
+    if (hiringPositionsJson !== undefined) {
+      console.log(`[Profile Update] hiringPositionsJson 필드는 스키마에 없어 무시됨: ${hiringPositionsJson}`);
+    }
+    
     const updatedProfile = await prisma.recruiterProfile.update({
       where: { id },
-      data: {
-        ...(companyName !== undefined && { companyName }),
-        ...(companyLogoUrl !== undefined && { companyLogoUrl }),
-        ...(companyDescription !== undefined && { companyDescription }),
-        ...(companyWebsite !== undefined && { companyWebsite }),
-        ...(position !== undefined && { position }),
-        ...(department !== undefined && { department }),
-        ...(idealCandidate !== undefined && { idealCandidate }),
-        ...(hiringPositionsJson !== undefined && { hiringPositionsJson: toJsonString(hiringPositionsJson) }),
-      },
+      data: updateData,
     });
 
     res.json(updatedProfile);

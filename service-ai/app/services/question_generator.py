@@ -79,7 +79,7 @@ def generate_first_question(
     # OpenAI API 호출
     try:
         response = client.chat.completions.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-5"),
+            model=os.getenv("OPENAI_MODEL", "gpt-4o"),
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -162,7 +162,7 @@ def generate_next_question(
     # OpenAI API 호출
     try:
         response = client.chat.completions.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-5"),
+            model=os.getenv("OPENAI_MODEL", "gpt-4o"),
             messages=messages
         )
         
@@ -242,7 +242,7 @@ def generate_next_question_stream(
     # OpenAI Streaming API 호출
     try:
         stream = client.chat.completions.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-4"),
+            model=os.getenv("OPENAI_MODEL", "gpt-4o"),
             messages=messages,
             stream=True
         )
@@ -284,4 +284,70 @@ def analyze_interview_depth(conversation_history: List[Dict[str, str]]) -> Dict[
         "should_continue": should_continue,
         "recommendation": recommendation
     }
+
+
+def should_ask_follow_up(
+    question_type: str,
+    follow_up_count: int,
+    answer_length: int = 0
+) -> bool:
+    """
+    꼬리질문 필요 여부 판단
+    
+    Args:
+        question_type: 질문 타입 (ice_breaking|common|competency)
+        follow_up_count: 현재까지 꼬리질문 개수
+        answer_length: 답변 길이 (문자 수)
+    
+    Returns:
+        True: 꼬리질문 필요, False: 다음 메인 질문으로 이동
+    
+    규칙:
+    - ice_breaking: 꼬리질문 없음 (자기소개는 한 번만)
+    - common: 최대 1개 (답변이 짧으면 1개)
+    - competency: 최대 2개 (답변이 충분하면 1개, 짧으면 2개)
+    """
+    # 아이스브레이킹은 꼬리질문 없음
+    if question_type == "ice_breaking":
+        return False
+    
+    # 공통 질문: 최대 1개
+    if question_type == "common":
+        return follow_up_count < 1 and answer_length < 100
+    
+    # 역량 평가 질문: 최대 2개
+    if question_type == "competency":
+        # 답변이 충분히 길면 (150자 이상) 1개만
+        if answer_length >= 150:
+            return follow_up_count < 1
+        # 답변이 짧으면 최대 2개
+        return follow_up_count < 2
+    
+    # 기본값: 꼬리질문 허용 안 함
+    return False
+
+
+def count_follow_ups_for_question(
+    conversation_history: List[Dict[str, str]],
+    main_question_index: int
+) -> int:
+    """
+    특정 메인 질문에 대한 꼬리질문 개수 계산
+    
+    Args:
+        conversation_history: 대화 기록
+        main_question_index: 메인 질문의 인덱스
+    
+    Returns:
+        해당 메인 질문에 대한 꼬리질문 개수
+    """
+    count = 0
+    # 메인 질문 이후의 AI 메시지 중 답변에 대한 추가 질문 카운트
+    for i in range(main_question_index + 2, len(conversation_history), 2):
+        if i < len(conversation_history) and conversation_history[i].get("role") == "AI":
+            count += 1
+        else:
+            break
+    
+    return count
 

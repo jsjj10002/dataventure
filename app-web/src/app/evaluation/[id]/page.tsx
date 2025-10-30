@@ -54,8 +54,8 @@ export default function EvaluationPage() {
     }
     
     try {
-      // evaluationId로 평가 직접 조회
-      const response = await evaluationAPI.get(evaluationId);
+      // interviewId로 평가 조회 (올바른 API 사용)
+      const response = await evaluationAPI.getByInterview(evaluationId);
       setEvaluation(response.data);
       setIsLoading(false);
       setIsRetrying(false);

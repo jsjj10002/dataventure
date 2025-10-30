@@ -22,6 +22,11 @@ const nextConfig = {
         source: '/uploads/:path*',
         destination: 'http://localhost:8080/uploads/:path*',
       },
+      // service-worker.js 요청 무시 (브라우저 캐시 문제 해결)
+      {
+        source: '/service-worker.js',
+        destination: '/404',
+      },
     ];
   },
 

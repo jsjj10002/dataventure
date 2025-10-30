@@ -51,9 +51,9 @@ export const useAuthStore = create<AuthStore>()(
 
           const { user, token } = response.data;
 
-          // LocalStorage에 토큰 저장
+          // LocalStorage에 토큰 저장 ('token' 키로 통일)
           if (typeof window !== 'undefined') {
-            localStorage.setItem('auth_token', token);
+            localStorage.setItem('token', token);
           }
 
           set({
@@ -94,9 +94,9 @@ export const useAuthStore = create<AuthStore>()(
 
           const { user, token } = response.data;
 
-          // LocalStorage에 토큰 저장
+          // LocalStorage에 토큰 저장 ('token' 키로 통일)
           if (typeof window !== 'undefined') {
-            localStorage.setItem('auth_token', token);
+            localStorage.setItem('token', token);
           }
 
           set({
@@ -127,9 +127,9 @@ export const useAuthStore = create<AuthStore>()(
        * 로그아웃
        */
       logout: () => {
-        // LocalStorage에서 토큰 삭제
+        // LocalStorage에서 토큰 삭제 ('token' 키로 통일)
         if (typeof window !== 'undefined') {
-          localStorage.removeItem('auth_token');
+          localStorage.removeItem('token');
         }
 
         set({
@@ -161,9 +161,9 @@ export const useAuthStore = create<AuthStore>()(
             error: null,
           });
         } catch (error: any) {
-          // 인증 오류 시 로그아웃 처리
+          // 인증 오류 시 로그아웃 처리 ('token' 키로 통일)
           if (typeof window !== 'undefined') {
-            localStorage.removeItem('auth_token');
+            localStorage.removeItem('token');
           }
 
           set({

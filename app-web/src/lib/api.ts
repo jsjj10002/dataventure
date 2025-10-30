@@ -233,7 +233,12 @@ export const profileAPI = {
 
 // 인터뷰 API
 export const interviewAPI = {
-  start: (data: { mode: string; duration: number; selectedQuestions?: string[]; customQuestions?: string[] }) => 
+  start: (data: { 
+    mode: string; 
+    duration: number; 
+    selectedQuestions?: {id: string; text: string; type: string; category: string; max_follow_ups: number}[]; 
+    customQuestions?: string[] 
+  }) => 
     apiClient.post<{ interviewId: string; questions: any[]; interviewPlan: any; duration: number }>('/api/v1/interview/start', data),
   
   get: (id: string) => 
@@ -244,6 +249,48 @@ export const interviewAPI = {
   
   addMessage: (id: string, data: { role: 'AI' | 'CANDIDATE'; content: string; contentType?: 'TEXT' | 'AUDIO'; audioUrl?: string }) => 
     apiClient.post(`/api/v1/interview/${id}/message`, data),
+};
+
+// 채용 공고 API
+export const jobPostingAPI = {
+  // 채용 공고 생성 (RECRUITER 전용)
+  createJobPosting: (data: {
+    title: string;
+    description: string;
+    position: string;
+    requirements?: string[];
+    preferredSkills?: string[];
+    experienceMin?: number;
+    experienceMax?: number;
+    salaryMin?: number;
+    salaryMax?: number;
+  }) => apiClient.post('/api/v1/jobs', data),
+  
+  // 채용 공고 목록 조회 (공개)
+  listJobPostings: (params?: { status?: string; position?: string; page?: number; limit?: number }) =>
+    apiClient.get('/api/v1/jobs', { params }),
+  
+  // 채용 공고 상세 조회 (공개)
+  getJobPosting: (id: string) =>
+    apiClient.get(`/api/v1/jobs/${id}`),
+  
+  // 채용 공고 수정 (RECRUITER 전용)
+  updateJobPosting: (id: string, data: Partial<{
+    title: string;
+    description: string;
+    position: string;
+    requirements: string[];
+    preferredSkills: string[];
+    experienceMin: number;
+    experienceMax: number;
+    salaryMin: number;
+    salaryMax: number;
+    status: 'ACTIVE' | 'CLOSED';
+  }>) => apiClient.put(`/api/v1/jobs/${id}`, data),
+  
+  // 채용 공고 삭제 (RECRUITER 전용)
+  deleteJobPosting: (id: string) =>
+    apiClient.delete(`/api/v1/jobs/${id}`),
 };
 
 // 평가 API
@@ -307,6 +354,99 @@ export const uploadAPI = {
   
   deleteFile: (url: string) => 
     apiClient.delete('/api/v1/upload', { data: { url } }),
+};
+
+// AI 서비스 Axios 인스턴스 (포트 8000)
+const aiServiceClient: AxiosInstance = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_AI_API_URL || 'http://localhost:8000',
+  timeout: 45000, // 기본 45초 (요청별로 조정 가능)
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// AI 서비스에도 토큰 추가
+aiServiceClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// 질문 생성 관련 타입
+export interface QuestionItem {
+  id: string;
+  text: string;
+  type: 'ice_breaking' | 'common' | 'competency';
+  category: string;
+  max_follow_ups: number;
+}
+
+export interface QuestionSetRequest {
+  candidateProfile?: {
+    skills?: string[];
+    experience?: number;
+    desiredPosition?: string;
+  };
+  jobPosting?: {
+    title?: string;
+    position?: string;
+    requirements?: string[];
+  };
+  mode: 'PRACTICE' | 'REAL';
+}
+
+export interface QuestionSetResponse {
+  questions: QuestionItem[];
+}
+
+// 질문 생성 API
+export const questionAPI = {
+  // 10개 질문 세트 생성 (180초 타임아웃 - OpenAI API 응답 시간 고려)
+  generateQuestionSet: (data: QuestionSetRequest) =>
+    aiServiceClient.post<QuestionSetResponse>('/api/v1/ai/generate-question-set', data, {
+      timeout: 180000  // ✅ 90초 → 180초 (3분)
+    }),
+  
+  // 단일 질문 생성 (기존 API - 필요시 사용, 60초 타임아웃)
+  generateQuestion: (data: {
+    interviewId?: string;
+    candidateProfile?: any;
+    jobPosting?: any;
+    conversationHistory?: any[];
+    lastAnswer?: string;
+    isFirstQuestion?: boolean;
+  }) =>
+    aiServiceClient.post('/api/v1/ai/generate-question', data, {
+      timeout: 60000  // 60초
+    }),
+};
+
+// 즉시 피드백 관련 타입
+export interface InstantFeedbackRequest {
+  question: string;
+  answer: string;
+  questionType?: 'ice_breaking' | 'common' | 'competency';
+}
+
+export interface InstantFeedbackResponse {
+  feedback: string;
+  strengths: string[];
+  improvements: string[];
+  score: number;
+}
+
+// 피드백 API
+export const feedbackAPI = {
+  // 즉시 피드백 생성 (채팅 모드용, 30초 타임아웃)
+  getInstantFeedback: (data: InstantFeedbackRequest) =>
+    aiServiceClient.post<InstantFeedbackResponse>('/api/v1/ai/instant-feedback', data, {
+      timeout: 30000  // 30초
+    }),
 };
 
 export default apiClient;

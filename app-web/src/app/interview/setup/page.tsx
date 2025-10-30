@@ -1,29 +1,37 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Mic, MessageSquare, Clock, Target, Loader2, Play, Check, Plus, X, Sparkles } from 'lucide-react';
+import { Mic, MessageSquare, Clock, Target, Loader2, Play, Check, Plus, X, Sparkles, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/stores/authStore';
-import { interviewAPI } from '@/lib/api';
+import { interviewAPI, questionAPI, QuestionItem } from '@/lib/api';
 import { Input } from '@/components/ui/input';
 import toast from 'react-hot-toast';
 import { PermissionTestModal } from '@/components/interview/PermissionTestModal';
 
-// 샘플 질문 (실제로는 프로필 기반 생성)
-const SAMPLE_QUESTIONS = [
-  { id: 1, text: '자기소개를 간단히 해주세요.', category: '공통' },
-  { id: 2, text: '왜 이 직무에 지원하셨나요?', category: '공통' },
-  { id: 3, text: '가장 자랑스러운 프로젝트 경험은 무엇인가요?', category: '공통' },
-  { id: 4, text: '팀워크 경험을 구체적으로 말씀해주세요.', category: '공통' },
-  { id: 5, text: '주어진 데이터를 보고 어떤 인사이트를 도출하시겠습니까?', category: '정보분석' },
-  { id: 6, text: '예상치 못한 문제가 발생했을 때 어떻게 대처하시나요?', category: '문제해결' },
-  { id: 7, text: '두 개의 상충되는 목표 사이에서 어떻게 균형을 맞추시겠습니까?', category: '유연한사고' },
-  { id: 8, text: '고객을 설득한 경험을 말씀해주세요.', category: '협상설득' },
-  { id: 9, text: '사용하는 알고리즘이나 자료구조에 대해 설명해주세요.', category: 'IT능력' },
-  { id: 10, text: '5년 후 자신의 모습은 어떨 것 같나요?', category: '공통' },
+// Skeleton 질문 컴포넌트
+const QuestionSkeleton = () => (
+  <div className="animate-pulse">
+    <div className="h-6 bg-gray-200 rounded w-3/4 mb-2"></div>
+    <div className="h-4 bg-gray-100 rounded w-1/4"></div>
+  </div>
+);
+
+// 기본 질문 세트 (AI 서비스 장애 시 fallback)
+const DEFAULT_QUESTIONS: QuestionItem[] = [
+  { id: "q1", text: "간단하게 자기소개 부탁드립니다.", type: "ice_breaking", category: "아이스브레이킹", max_follow_ups: 0 },
+  { id: "q2", text: "이 직무에 지원하신 이유는 무엇인가요?", type: "common", category: "지원 동기", max_follow_ups: 1 },
+  { id: "q3", text: "본인의 가장 큰 강점은 무엇이라고 생각하시나요?", type: "competency", category: "자기 인식", max_follow_ups: 1 },
+  { id: "q4", text: "가장 어려웠던 프로젝트 경험에 대해 말씀해주세요.", type: "competency", category: "문제 해결", max_follow_ups: 2 },
+  { id: "q5", text: "팀원과 협업할 때 중요하게 생각하는 가치는 무엇인가요?", type: "competency", category: "협업", max_follow_ups: 1 },
+  { id: "q6", text: "새로운 기술을 학습할 때 어떤 방식으로 접근하시나요?", type: "competency", category: "학습 능력", max_follow_ups: 1 },
+  { id: "q7", text: "업무 우선순위를 어떻게 설정하시나요?", type: "competency", category: "시간 관리", max_follow_ups: 1 },
+  { id: "q8", text: "의견 충돌 상황을 어떻게 해결하시나요?", type: "competency", category: "커뮤니케이션", max_follow_ups: 2 },
+  { id: "q9", text: "실패한 경험과 그로부터 배운 점을 말씀해주세요.", type: "competency", category: "성장", max_follow_ups: 2 },
+  { id: "q10", text: "5년 후 본인의 모습은 어떨 것 같나요?", type: "competency", category: "비전", max_follow_ups: 1 }
 ];
 
 export default function InterviewSetupPage() {
@@ -39,12 +47,19 @@ export default function InterviewSetupPage() {
   // 권한 테스트 모달
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   
-  // 질문 선택 (연습 모드)
-  const [selectedQuestions, setSelectedQuestions] = useState<number[]>([]);
+  // 질문 생성 및 선택
+  const [generatedQuestions, setGeneratedQuestions] = useState<QuestionItem[]>([]);
+  const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
+  const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
   const [customQuestion, setCustomQuestion] = useState('');
   const [customQuestions, setCustomQuestions] = useState<string[]>([]);
 
-  // 인증 확인
+  // 선택된 질문 객체 배열 계산 (ID 기반으로 필터링)
+  const selectedQuestions = useMemo(() => {
+    return generatedQuestions.filter(q => selectedQuestionIds.includes(q.id));
+  }, [generatedQuestions, selectedQuestionIds]);
+
+  // 인증 확인 및 질문 생성
   useEffect(() => {
     if (!isAuthenticated) {
       toast.error('로그인이 필요합니다.');
@@ -57,11 +72,67 @@ export default function InterviewSetupPage() {
       router.push('/');
       return;
     }
+    
+    // 페이지 진입 시 질문 생성
+    generateQuestions();
   }, [isAuthenticated, user]);
 
-  // 질문 토글
-  const toggleQuestion = (questionId: number) => {
-    setSelectedQuestions((prev) => {
+  // 질문 생성 함수
+  const generateQuestions = async () => {
+    setIsGeneratingQuestions(true);
+    try {
+      const response = await questionAPI.generateQuestionSet({
+        candidateProfile: {
+          // TODO: 사용자 프로필에서 가져오기
+          skills: [],
+          experience: 0,
+          desiredPosition: '소프트웨어 엔지니어'
+        },
+        jobPosting: {
+          title: '신입 개발자 채용',
+          position: '백엔드 개발',
+          requirements: []
+        },
+        mode: mode === 'PRACTICE' ? 'PRACTICE' : 'REAL'
+      });
+      
+      setGeneratedQuestions(response.data.questions);
+      
+      // 연습 모드에서는 처음 5개 자동 선택
+      if (mode === 'PRACTICE') {
+        setSelectedQuestionIds(response.data.questions.slice(0, 5).map(q => q.id));
+      }
+      
+      toast.success('질문이 생성되었습니다!');
+    } catch (error: any) {
+      console.error('질문 생성 실패:', error);
+      
+      // 에러 타입별 메시지
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        toast.error('서버 응답 시간이 초과되었습니다. service-ai가 실행 중인지 확인해주세요.');
+      } else if (error.response?.status === 500) {
+        toast.error('AI 서비스에 문제가 발생했습니다. OpenAI API 키를 확인해주세요.');
+      } else if (error.message?.includes('Network Error') || error.code === 'ERR_NETWORK') {
+        toast.error('AI 서비스에 연결할 수 없습니다. service-ai가 실행 중인지 확인해주세요.');
+      } else {
+        toast.error('질문 생성에 실패했습니다. 기본 질문을 사용합니다.');
+      }
+      
+      // 프론트엔드 기본 질문 세트 사용
+      setGeneratedQuestions(DEFAULT_QUESTIONS);
+      
+      // 연습 모드에서는 처음 5개 자동 선택
+      if (mode === 'PRACTICE') {
+        setSelectedQuestionIds(DEFAULT_QUESTIONS.slice(0, 5).map(q => q.id));
+      }
+    } finally {
+      setIsGeneratingQuestions(false);
+    }
+  };
+
+  // 질문 토글 (연습 모드에서만 사용)
+  const toggleQuestion = (questionId: string) => {
+    setSelectedQuestionIds((prev) => {
       if (prev.includes(questionId)) {
         return prev.filter((id) => id !== questionId);
       } else if (prev.length < 5) {
@@ -125,9 +196,16 @@ export default function InterviewSetupPage() {
       const response = await interviewAPI.start({
         mode: mode,
         duration: duration,
-        // 선택된 질문 전달 (추후 구현)
-        // selectedQuestions: mode === 'PRACTICE' ? selectedQuestions : undefined,
-        // customQuestions: mode === 'PRACTICE' ? customQuestions : undefined,
+        voiceMode: isVoiceMode,  // ✅ 음성 모드 정보 전달
+        // 선택된 질문 전달
+        selectedQuestions: mode === 'PRACTICE' ? selectedQuestions.map(q => ({
+          id: q.id,
+          text: q.text,
+          type: q.type,
+          category: q.category,
+          max_follow_ups: q.max_follow_ups
+        })) : undefined,
+        customQuestions: mode === 'PRACTICE' ? customQuestions : undefined,
       });
       
       const { interviewId } = response.data;
@@ -338,36 +416,88 @@ export default function InterviewSetupPage() {
               <CardContent className="space-y-6">
                 {/* 추천 질문 목록 */}
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-3">
-                    프로필 기반 추천 질문 ({selectedQuestions.length}/5 선택)
-                  </h4>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-medium text-gray-700">
+                      프로필 기반 AI 생성 질문 ({selectedQuestionIds.length}/5 선택)
+                    </h4>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={generateQuestions}
+                      disabled={isGeneratingQuestions}
+                      className="h-8"
+                    >
+                      {isGeneratingQuestions ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                      )}
+                      {isGeneratingQuestions ? '생성 중...' : '새로 생성'}
+                    </Button>
+                  </div>
+                  
                   <div className="space-y-2">
-                    {SAMPLE_QUESTIONS.map((q) => (
-                      <label
-                        key={q.id}
-                        className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                          selectedQuestions.includes(q.id)
-                            ? 'border-primary bg-primary/5'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedQuestions.includes(q.id)}
-                          onChange={() => toggleQuestion(q.id)}
-                          className="mt-1 h-4 w-4 text-primary rounded focus:ring-primary"
-                        />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-900">{q.text}</p>
-                          <span className="inline-block mt-1 px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">
-                            {q.category}
-                          </span>
+                    {isGeneratingQuestions ? (
+                      // Skeleton Loading
+                      Array.from({ length: 10 }).map((_, idx) => (
+                        <div key={idx} className="p-3 rounded-lg border-2 border-gray-200">
+                          <QuestionSkeleton />
                         </div>
-                        {selectedQuestions.includes(q.id) && (
-                          <Check className="h-5 w-5 text-primary flex-shrink-0" />
-                        )}
-                      </label>
-                    ))}
+                      ))
+                    ) : generatedQuestions.length > 0 ? (
+                      // 생성된 질문 목록
+                      generatedQuestions.map((q) => (
+                        <label
+                          key={q.id}
+                          className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                            selectedQuestionIds.includes(q.id)
+                              ? 'border-primary bg-primary/5'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedQuestionIds.includes(q.id)}
+                            onChange={() => toggleQuestion(q.id)}
+                            className="mt-1 h-4 w-4 text-primary rounded focus:ring-primary"
+                          />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">{q.text}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="inline-block px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">
+                                {q.category}
+                              </span>
+                              {q.type === 'ice_breaking' && (
+                                <span className="inline-block px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">
+                                  아이스브레이킹
+                                </span>
+                              )}
+                              {q.type === 'common' && (
+                                <span className="inline-block px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">
+                                  공통 질문
+                                </span>
+                              )}
+                              {q.type === 'competency' && (
+                                <span className="inline-block px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-700">
+                                  역량 평가
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {selectedQuestionIds.includes(q.id) && (
+                            <Check className="h-5 w-5 text-primary flex-shrink-0" />
+                          )}
+                        </label>
+                      ))
+                    ) : (
+                      // 질문 없음 (에러 발생 시)
+                      <div className="text-center py-8 text-gray-500">
+                        <p className="mb-2">질문을 불러올 수 없습니다.</p>
+                        <Button onClick={generateQuestions} variant="outline" size="sm">
+                          다시 시도
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
 

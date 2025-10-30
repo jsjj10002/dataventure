@@ -3,7 +3,7 @@
  */
 
 import { Socket } from 'socket.io';
-import { MessageRole, ContentType } from '@prisma/client';
+import { MessageRole, ContentType, PrismaClient } from '@prisma/client';
 import {
   createInterview,
   saveMessage,
@@ -12,6 +12,8 @@ import {
   getInterview,
   getInterviewMessages,
 } from '../services/interview.service';
+
+const prisma = new PrismaClient();
 
 /**
  * 인터뷰 관련 Socket.IO 이벤트 핸들러 등록
@@ -93,16 +95,102 @@ export const registerInterviewHandlers = (socket: Socket) => {
         data.audioUrl
       );
 
-      // AI에게 다음 질문 요청 (Streaming 사용)
-      let nextQuestion: string;
+      // 인터뷰 정보 및 질문 계획 가져오기
+      const interview = await getInterview(data.interviewId);
+      let questionPlan = null;
+      
       try {
-        // Streaming을 사용하여 실시간으로 질문 전송
-        // (현재는 전체 질문을 모은 후 한 번에 전송 - 향후 개선 가능)
-        nextQuestion = await generateNextQuestion(data.interviewId, data.content);
+        if (interview.questionPlanJson) {
+          questionPlan = JSON.parse(interview.questionPlanJson);
+        }
       } catch (error) {
-        console.error('[Socket.IO] AI 질문 생성 실패, 기본 질문 사용:', error);
-        // 기본 질문 사용
-        nextQuestion = '말씀해주신 내용에 대해 더 자세히 설명해주시겠어요?';
+        console.error('[Socket.IO] 질문 계획 파싱 오류:', error);
+      }
+
+      // AI에게 다음 질문 요청
+      let nextQuestion: string;
+      let isFollowUp = false;
+      
+      if (questionPlan && questionPlan.questions && questionPlan.questions.length > 0) {
+        // 질문 계획이 있는 경우 (연습 모드 선택 질문)
+        const currentIndex = questionPlan.currentIndex;
+        const currentQuestion = questionPlan.questions[currentIndex];
+        
+        // 현재 질문이 이미 물어봤는지 확인
+        if (!currentQuestion.asked) {
+          // 첫 번째 답변: 메인 질문에 대한 답변
+          currentQuestion.asked = true;
+          
+          // 꼬리질문이 가능한지 확인
+          const canAskFollowUp = 
+            currentQuestion.max_follow_ups > 0 && 
+            currentQuestion.follow_up_count < currentQuestion.max_follow_ups;
+          
+          if (canAskFollowUp) {
+            // 꼬리질문 생성
+            try {
+              nextQuestion = await generateNextQuestion(data.interviewId, data.content);
+              currentQuestion.follow_up_count++;
+              isFollowUp = true;
+              console.log(`[Socket.IO] 꼬리질문 ${currentQuestion.follow_up_count}/${currentQuestion.max_follow_ups} 생성`);
+            } catch (error) {
+              console.error('[Socket.IO] 꼬리질문 생성 실패, 다음 질문으로 이동:', error);
+              // 꼬리질문 생성 실패 시 다음 메인 질문으로 이동
+              questionPlan.currentIndex++;
+            }
+          } else {
+            // 꼬리질문이 없거나 한계 도달 -> 다음 메인 질문으로 이동
+            questionPlan.currentIndex++;
+          }
+        } else {
+          // 이미 메인 질문을 물어본 경우 -> 꼬리질문 또는 다음 질문
+          const canAskFollowUp = 
+            currentQuestion.max_follow_ups > 0 && 
+            currentQuestion.follow_up_count < currentQuestion.max_follow_ups;
+          
+          if (canAskFollowUp) {
+            // 추가 꼬리질문 생성
+            try {
+              nextQuestion = await generateNextQuestion(data.interviewId, data.content);
+              currentQuestion.follow_up_count++;
+              isFollowUp = true;
+              console.log(`[Socket.IO] 추가 꼬리질문 ${currentQuestion.follow_up_count}/${currentQuestion.max_follow_ups} 생성`);
+            } catch (error) {
+              console.error('[Socket.IO] 추가 꼬리질문 생성 실패, 다음 질문으로 이동:', error);
+              questionPlan.currentIndex++;
+            }
+          } else {
+            // 다음 메인 질문으로 이동
+            questionPlan.currentIndex++;
+          }
+        }
+        
+        // 다음 메인 질문이 있고 꼬리질문이 아닌 경우
+        if (!isFollowUp && questionPlan.currentIndex < questionPlan.questions.length) {
+          const nextMainQuestion = questionPlan.questions[questionPlan.currentIndex];
+          nextQuestion = nextMainQuestion.text;
+          console.log(`[Socket.IO] 메인 질문 ${questionPlan.currentIndex + 1}/${questionPlan.questions.length}: ${nextQuestion}`);
+        } else if (!isFollowUp) {
+          // 모든 질문 완료
+          nextQuestion = '모든 질문이 완료되었습니다. 수고하셨습니다! 인터뷰를 종료하시겠습니까?';
+          console.log(`[Socket.IO] 모든 질문 완료`);
+        }
+        
+        // 질문 계획 업데이트 저장
+        await prisma.interview.update({
+          where: { id: data.interviewId },
+          data: {
+            questionPlanJson: JSON.stringify(questionPlan),
+          },
+        });
+      } else {
+        // 질문 계획이 없는 경우 (기존 방식)
+        try {
+          nextQuestion = await generateNextQuestion(data.interviewId, data.content);
+        } catch (error) {
+          console.error('[Socket.IO] AI 질문 생성 실패, 기본 질문 사용:', error);
+          nextQuestion = '말씀해주신 내용에 대해 더 자세히 설명해주시겠어요?';
+        }
       }
 
       // AI 질문 저장
@@ -120,6 +208,7 @@ export const registerInterviewHandlers = (socket: Socket) => {
         content: aiMessage.content,
         contentType: aiMessage.contentType,
         createdAt: aiMessage.createdAt,
+        isFollowUp: isFollowUp, // 꼬리질문 여부 전달
       });
 
       console.log(`[Socket.IO] AI 질문 전송됨: ${data.interviewId}`);

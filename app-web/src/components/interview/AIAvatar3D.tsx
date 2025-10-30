@@ -1,12 +1,13 @@
 'use client';
 
-import { useRef } from 'react';
+import React, { useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Sphere, Box, Cylinder, Torus } from '@react-three/drei';
 import * as THREE from 'three';
 
 interface AIAvatarProps {
   isSpeaking?: boolean;
+  audioVolume?: number; // 0-1 범위의 오디오 볼륨 (립싱크용)
   emotion?: 'neutral' | 'happy' | 'thinking' | 'surprised';
   className?: string;
   mousePosition?: { x: number; y: number };
@@ -18,7 +19,7 @@ interface AIAvatarProps {
  * - 고품질 조명과 재질
  * - 미세한 애니메이션 디테일
  */
-function ProfessionalHead({ isSpeaking, emotion, mousePosition }: Pick<AIAvatarProps, 'isSpeaking' | 'emotion' | 'mousePosition'>) {
+function ProfessionalHead({ isSpeaking, audioVolume = 0, emotion, mousePosition }: Pick<AIAvatarProps, 'isSpeaking' | 'audioVolume' | 'emotion' | 'mousePosition'>) {
   const headRef = useRef<THREE.Group>(null);
   const leftEyeRef = useRef<THREE.Mesh>(null);
   const rightEyeRef = useRef<THREE.Mesh>(null);
@@ -67,22 +68,43 @@ function ProfessionalHead({ isSpeaking, emotion, mousePosition }: Pick<AIAvatarP
       }
     }
     
-    // 말할 때 입 움직임 (립싱크 - 자연스럽게)
-    if (mouthRef.current && isSpeaking) {
-      const mouthOpen = Math.abs(Math.sin(state.clock.elapsedTime * 9)) * 0.08;
-      mouthRef.current.scale.y = 1 + mouthOpen * 2;
-      mouthRef.current.position.y = -0.38 - mouthOpen * 0.5;
+    // 말할 때 입 움직임 (립싱크 - 오디오 볼륨 기반)
+    if (mouthRef.current && isSpeaking && audioVolume > 0) {
+      // audioVolume (0-1)을 입 벌림 정도로 변환
+      // 볼륨이 작아도 보이도록 최소값 설정
+      const volumeScale = Math.max(audioVolume * 2, 0.1); // 최소 10% 벌림
+      const mouthOpen = volumeScale * 0.12; // 최대 12% 벌림
+      
+      // 부드러운 전환
+      mouthRef.current.scale.y = THREE.MathUtils.lerp(
+        mouthRef.current.scale.y,
+        1 + mouthOpen * 2,
+        0.3 // 빠른 응답
+      );
+      mouthRef.current.position.y = THREE.MathUtils.lerp(
+        mouthRef.current.position.y,
+        -0.38 - mouthOpen * 0.5,
+        0.3
+      );
     } else if (mouthRef.current) {
-      mouthRef.current.scale.y = THREE.MathUtils.lerp(mouthRef.current.scale.y, 1, 0.15);
-      mouthRef.current.position.y = THREE.MathUtils.lerp(mouthRef.current.position.y, -0.38, 0.15);
+      // 입 닫기
+      mouthRef.current.scale.y = THREE.MathUtils.lerp(mouthRef.current.scale.y, 1, 0.2);
+      mouthRef.current.position.y = THREE.MathUtils.lerp(mouthRef.current.position.y, -0.38, 0.2);
     }
     
-    // 턱 움직임
-    if (jawRef.current && isSpeaking) {
-      const jawOpen = Math.abs(Math.sin(state.clock.elapsedTime * 9)) * 0.05;
-      jawRef.current.position.y = THREE.MathUtils.lerp(jawRef.current.position.y, -0.68 - jawOpen, 0.2);
+    // 턱 움직임 (오디오 볼륨 기반)
+    if (jawRef.current && isSpeaking && audioVolume > 0) {
+      const volumeScale = Math.max(audioVolume * 2, 0.1);
+      const jawOpen = volumeScale * 0.08;
+      
+      jawRef.current.position.y = THREE.MathUtils.lerp(
+        jawRef.current.position.y,
+        -0.68 - jawOpen,
+        0.3
+      );
     } else if (jawRef.current) {
-      jawRef.current.position.y = THREE.MathUtils.lerp(jawRef.current.position.y, -0.68, 0.15);
+      // 턱 닫기
+      jawRef.current.position.y = THREE.MathUtils.lerp(jawRef.current.position.y, -0.68, 0.2);
     }
     
     // 눈 깜빡임 (더 자연스러운 타이밍)
@@ -301,15 +323,77 @@ function ProfessionalHead({ isSpeaking, emotion, mousePosition }: Pick<AIAvatarP
  * - 이질감 없는 외모와 비율
  * - 고급 조명과 재질
  */
+// WebGL 지원 체크 함수
+function checkWebGLSupport(): boolean {
+  try {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    return !!gl;
+  } catch (e) {
+    return false;
+  }
+}
+
 export default function AIAvatar3D({ 
-  isSpeaking = false, 
+  isSpeaking = false,
+  audioVolume = 0,
   emotion = 'neutral',
   className = '',
   mousePosition = { x: typeof window !== 'undefined' ? window.innerWidth / 2 : 0, y: typeof window !== 'undefined' ? window.innerHeight / 2 : 0 }
 }: AIAvatarProps) {
+  const [webglSupported, setWebglSupported] = React.useState<boolean | null>(null);
+  const [renderError, setRenderError] = React.useState<string | null>(null);
+  
+  // WebGL 지원 체크 (클라이언트에서만)
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isSupported = checkWebGLSupport();
+      console.log('[AIAvatar3D] WebGL 지원:', isSupported);
+      setWebglSupported(isSupported);
+      
+      if (!isSupported) {
+        console.error('[AIAvatar3D] WebGL이 지원되지 않습니다. Fallback UI를 표시합니다.');
+      }
+    }
+  }, []);
+  
+  // WebGL 지원되지 않을 때 fallback UI
+  if (webglSupported === false) {
+    return (
+      <div className={`${className} flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900`}>
+        <div className="text-center p-8">
+          <div className="w-32 h-32 mx-auto mb-4 rounded-full bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center">
+            <div className="text-6xl">🤖</div>
+          </div>
+          <p className="text-white text-lg font-semibold mb-2">AI 면접관</p>
+          <p className="text-gray-400 text-sm">
+            3D 아바타를 표시하려면 WebGL이 필요합니다.
+          </p>
+          {isSpeaking && (
+            <div className="mt-4 flex items-center justify-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-primary-400 animate-pulse" />
+              <span className="text-primary-400 text-sm">말하는 중...</span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+  
+  // 로딩 중
+  if (webglSupported === null) {
+    return (
+      <div className={`${className} flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900`}>
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-white text-sm">AI 아바타 로딩 중...</p>
+        </div>
+      </div>
+    );
+  }
   
   return (
-    <div className={`${className} relative`}>
+    <div className={`${className} relative`} style={{ minHeight: '400px' }}>
       <Canvas
         camera={{ position: [0, 0, 4.2], fov: 48 }}
         shadows
@@ -319,7 +403,17 @@ export default function AIAvatar3D({
           alpha: true,
           powerPreference: 'high-performance'
         }}
-        style={{ background: 'transparent' }}
+        style={{ width: '100%', height: '100%', minHeight: '400px', background: 'transparent' }}
+        onCreated={(state) => {
+          console.log('[AIAvatar3D] Canvas 생성 완료', {
+            gl: state.gl.capabilities,
+            size: state.size
+          });
+        }}
+        onError={(error) => {
+          console.error('[AIAvatar3D] Canvas 에러:', error);
+          setRenderError(error.message);
+        }}
       >
         {/* 전문가급 조명 시스템 - 3점 조명 + 추가 채광 */}
         
@@ -364,7 +458,8 @@ export default function AIAvatar3D({
         
         {/* 전문가급 아바타 헤드 */}
         <ProfessionalHead 
-          isSpeaking={isSpeaking} 
+          isSpeaking={isSpeaking}
+          audioVolume={audioVolume}
           emotion={emotion}
           mousePosition={mousePosition}
         />

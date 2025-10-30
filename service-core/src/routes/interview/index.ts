@@ -13,7 +13,7 @@ const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
  */
 router.post('/start', authenticateToken, async (req, res) => {
   try {
-    const { mode, duration, selectedQuestions, customQuestions } = req.body;
+    const { mode, duration, selectedQuestions, customQuestions, voiceMode } = req.body;  // ✅ voiceMode 추가
     
     if (!req.user) {
       return res.status(401).json({ error: '인증이 필요합니다.' });
@@ -45,21 +45,124 @@ router.post('/start', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: '프로필을 먼저 작성해주세요.' });
     }
 
-    // AI 서비스에 질문 생성 요청
-    const aiResponse = await axios.post(`${AI_SERVICE_URL}/internal/ai/generate-question`, {
-      profile: {
-        education: profile.education, // 스키마 필드명 수정
-        experience: profile.careerHistory, // 스키마 필드명 수정
-        projects: profile.projects, // 스키마 필드명 수정
-        skills: profile.skills, // 스키마 필드명 수정 (String[] 배열)
-        desiredPosition: profile.desiredPosition,
-      },
-      mode: interviewMode,
-      selectedQuestions,
-      customQuestions,
-    });
+    // 질문 계획 준비
+    let questionPlan = null;
+    let aiQuestions = [];
+    
+    if (selectedQuestions && selectedQuestions.length > 0) {
+      // 연습 모드에서 선택한 질문이 있는 경우
+      questionPlan = {
+        questions: selectedQuestions.map((q: any) => ({
+          id: q.id,
+          text: q.text,
+          type: q.type,
+          category: q.category,
+          max_follow_ups: q.max_follow_ups || 0,
+          asked: false,
+          follow_up_count: 0,
+          is_custom: false
+        })),
+        currentIndex: 0
+      };
+      
+      // 커스텀 질문 추가
+      if (customQuestions && customQuestions.length > 0) {
+        customQuestions.forEach((text: string, index: number) => {
+          questionPlan.questions.push({
+            id: `custom-${index}`,
+            text,
+            type: 'common',
+            category: '커스텀 질문',
+            max_follow_ups: 0,
+            asked: false,
+            follow_up_count: 0,
+            is_custom: true
+          });
+        });
+      }
+      
+      aiQuestions = questionPlan.questions;
+    } else {
+      // ✅ 실전 모드 또는 AI 질문 생성 필요
+      console.log(`[Interview Start] AI 질문 생성 시작. 모드: ${interviewMode}`);
+      
+      // 프로필 데이터 변환 (AI 서비스 형식에 맞춤)
+      let candidateProfileData = null;
+      if (profile) {
+        try {
+          // careerHistory 파싱하여 경력 년수 계산
+          let totalExperienceYears = 0;
+          if (profile.careerHistory) {
+            const careerHistory = typeof profile.careerHistory === 'string' 
+              ? JSON.parse(profile.careerHistory) 
+              : profile.careerHistory;
+            
+            // 각 경력의 기간 계산
+            if (Array.isArray(careerHistory)) {
+              careerHistory.forEach((career: any) => {
+                const startDate = new Date(career.startDate);
+                const endDate = career.endDate ? new Date(career.endDate) : new Date();
+                const years = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 365);
+                totalExperienceYears += years;
+              });
+            }
+          }
+          
+          candidateProfileData = {
+            skills: profile.skills || [],  // String[] 그대로 전달
+            experience: Math.floor(totalExperienceYears),  // 경력 년수 (정수)
+            desiredPosition: profile.desiredPosition || '소프트웨어 엔지니어',
+          };
+          
+          console.log(`[Interview Start] 프로필 데이터 변환 완료:`, candidateProfileData);
+        } catch (parseError) {
+          console.error('[Interview Start] 프로필 데이터 파싱 오류:', parseError);
+          // 기본값 사용
+          candidateProfileData = {
+            skills: profile.skills || [],
+            experience: 0,
+            desiredPosition: profile.desiredPosition || '소프트웨어 엔지니어',
+          };
+        }
+      }
+      
+      // ✅ 질문 세트 생성 (실전 모드는 10개)
+      const aiResponse = await axios.post(
+        `${AI_SERVICE_URL}/internal/ai/generate-question-set`,  // ✅ 올바른 엔드포인트
+        {
+          candidateProfile: candidateProfileData,  // ✅ 올바른 필드명
+          jobPosting: {
+            title: '신입 개발자 채용',
+            position: candidateProfileData?.desiredPosition || '소프트웨어 엔지니어',
+            requirements: [],
+          },
+          mode: interviewMode,
+        },
+        {
+          timeout: 30000,  // 30초 타임아웃
+        }
+      );
 
-    const { questions, interviewPlan } = aiResponse.data;
+      const { questions } = aiResponse.data;
+      aiQuestions = questions;
+      
+      console.log(`[Interview Start] AI 질문 ${questions.length}개 생성 완료`);
+      
+      // AI 생성 질문으로 질문 계획 생성
+      questionPlan = {
+        questions: questions.map((q: any) => ({
+          id: q.id,
+          text: q.text,
+          type: q.type || 'common',
+          category: q.category || '일반',
+          max_follow_ups: q.max_follow_ups || 1,
+          asked: false,
+          follow_up_count: 0,
+          is_custom: false
+        })),
+        currentIndex: 0
+      };
+    }
 
     // 인터뷰 세션 생성
     const interview = await prisma.interview.create({
@@ -67,19 +170,45 @@ router.post('/start', authenticateToken, async (req, res) => {
         candidateId: userId,
         mode: interviewMode,
         timeLimitSeconds: duration ? duration * 60 : 900, // 분을 초로 변환
-        isVoiceMode: interviewMode === 'ACTUAL',
+        isVoiceMode: voiceMode !== undefined ? voiceMode : (interviewMode === 'ACTUAL'),  // ✅ voiceMode 반영
+        questionCount: questionPlan.questions.length,
+        questionPlanJson: JSON.stringify(questionPlan),
         status: 'IN_PROGRESS',
       },
     });
 
     res.json({
       interviewId: interview.id,
-      questions,
-      interviewPlan,
+      questions: aiQuestions,
+      interviewPlan: questionPlan,
       duration: interview.timeLimitSeconds,
+      questionCount: questionPlan.questions.length,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('인터뷰 시작 오류:', error);
+    
+    // ✅ AI 서비스 응답 에러
+    if (error.response) {
+      console.error('[Interview Start] AI 서비스 응답 에러:', {
+        status: error.response.status,
+        data: error.response.data,
+      });
+      
+      return res.status(500).json({ 
+        error: 'AI 질문 생성에 실패했습니다.',
+        details: error.response.data?.detail || error.message,
+      });
+    }
+    
+    // ✅ AI 서비스 연결 실패
+    if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+      console.error('[Interview Start] AI 서비스 연결 실패');
+      
+      return res.status(503).json({ 
+        error: 'AI 서비스에 연결할 수 없습니다.',
+        details: 'service-ai가 실행 중인지 확인해주세요.',
+      });
+    }
     
     // Prisma validation error 처리
     if (error instanceof Error && error.message.includes('Invalid')) {
@@ -89,6 +218,7 @@ router.post('/start', authenticateToken, async (req, res) => {
       });
     }
     
+    // 기타 에러
     res.status(500).json({ 
       error: '인터뷰 시작에 실패했습니다.',
       details: error instanceof Error ? error.message : '알 수 없는 오류'
@@ -174,7 +304,18 @@ router.put('/:id/complete', authenticateToken, async (req, res) => {
       try {
         console.log(`[평가 생성 시작] 인터뷰 ID: ${id}`);
         
-        // 1. 메시지 조회
+        // ✅ 1단계: 먼저 기존 평가 확인 (중복 생성 원천 차단)
+        const existingEval = await prisma.evaluation.findUnique({
+          where: { interviewId: id }
+        });
+        
+        if (existingEval) {
+          console.log(`[평가 생성] 이미 평가가 존재합니다. 인터뷰 ID: ${id}, 평가 ID: ${existingEval.id}`);
+          console.log(`[평가 생성] 기존 평가 유지. 종합 점수: ${existingEval.overallScore}점`);
+          return; // 생성도 알림도 하지 않음 (이미 완료)
+        }
+        
+        // 2. 메시지 조회
         const messages = await prisma.interviewMessage.findMany({
           where: { interviewId: id },
           orderBy: { createdAt: 'asc' },
@@ -224,7 +365,7 @@ router.put('/:id/complete', authenticateToken, async (req, res) => {
           {
             interviewId: id, // 필수 필드 추가
             conversationHistory: messages.map(m => ({
-              role: m.role.toLowerCase(),
+              role: m.role.toUpperCase(), // ✅ 대문자로 통일 (Phase 2)
               content: m.content
             })),
             candidateProfile: profileData,
@@ -273,21 +414,29 @@ router.put('/:id/complete', authenticateToken, async (req, res) => {
         });
 
         console.log(`[평가 생성] 알림 생성 완료`);
-      } catch (evalError) {
+      } catch (evalError: any) {
         console.error('[평가 생성 오류] 상세 정보:', evalError);
+        
+        // ✅ P2002 에러 처리 (방어 코드 - 이론상 발생 안함)
+        if (evalError.code === 'P2002') {
+          console.log(`[평가 생성] P2002 중복 에러 발생 (방어 코드 작동). 인터뷰 ID: ${id}`);
+          console.log(`[평가 생성] 이미 평가가 존재하는 것으로 추정. 알림 생성 스킵.`);
+          return; // 에러 알림도 생성하지 않음
+        }
+        
         if (evalError instanceof Error) {
           console.error('[평가 생성 오류] 메시지:', evalError.message);
           console.error('[평가 생성 오류] 스택:', evalError.stack);
         }
         
-        // 평가 생성 실패 시 알림
+        // ✅ 진짜 에러인 경우만 알림 생성 (P2002가 아닌 경우)
         try {
           await prisma.notification.create({
             data: {
               userId: interview.candidateId,
               type: 'SYSTEM',
-              title: '평가 생성 지연',
-              message: '인터뷰 평가가 생성 중입니다. 잠시 후 확인해주세요.',
+              title: '평가 생성 오류',
+              message: '인터뷰 평가 생성 중 문제가 발생했습니다. 고객센터에 문의해주세요.',
               link: `/dashboard`,
             },
           });

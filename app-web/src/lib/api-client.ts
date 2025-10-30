@@ -25,7 +25,8 @@ export const apiClient: AxiosInstance = axios.create({
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('auth_token');
+      // 'token' 키로 통일 (authStore.ts와 일치)
+      const token = localStorage.getItem('token');
       
       if (token && config.headers) {
         config.headers.Authorization = `Bearer ${token}`;
@@ -51,7 +52,8 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       // 인증 오류: 토큰 삭제 및 로그인 페이지로 리다이렉트
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('auth_token');
+        // 'token' 키로 통일
+        localStorage.removeItem('token');
         localStorage.removeItem('user');
         
         // 현재 페이지가 로그인/회원가입이 아닐 경우에만 리다이렉트
